@@ -20,5 +20,5 @@ settings.link.libs:Add("SDL2_image");
 source = Collect("*.c");
 
 objects = Compile(settings, source)
-exe = Link(settings, "isometric_engine", objects)
+exe = Link(settings, "sdl2d", objects)
 

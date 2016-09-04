@@ -1,0 +1,7 @@
+.bam
+*.swp
+*.o
+sdl2d
+*.exe
+*.obj
+
