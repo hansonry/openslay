@@ -13,9 +13,11 @@ int main(int args, char * argc[])
    int ticks_previous, ticks_diff, ticks_now;
    float seconds;
 
+   SDL_Rect rect;
+
    
    SDL_Surface * surface_loading;
-   SDL_Texture * texture_cube;
+   SDL_Texture * texture_sdl2d;
    
    
    SDL_Init(SDL_INIT_EVERYTHING);   
@@ -29,10 +31,13 @@ int main(int args, char * argc[])
    
 
    
-   surface_loading = IMG_Load("cube.bmp");
-   texture_cube = SDL_CreateTextureFromSurface(rend, surface_loading);
+   surface_loading = IMG_Load("sdl2d.png");
+   texture_sdl2d = SDL_CreateTextureFromSurface(rend, surface_loading);
    SDL_FreeSurface(surface_loading);
-   
+   SDL_QueryTexture(texture_sdl2d, NULL, NULL, &rect.w, &rect.h);
+   rect.x = (800 - rect.w) / 2;
+   rect.y = (600 - rect.h) / 2;
+
    
    ticks_previous = SDL_GetTicks();
    
@@ -55,13 +60,14 @@ int main(int args, char * argc[])
       SDL_SetRenderDrawColor(rend, 0x00, 0x00, 0x00, 0xFF);
       SDL_RenderClear( rend );
 
-      
+      SDL_RenderCopy(rend, texture_sdl2d, NULL, &rect);
+       
       
       SDL_RenderPresent(rend);
    }
    
    
-   SDL_DestroyTexture(texture_cube);
+   SDL_DestroyTexture(texture_sdl2d);
    
    SDL_DestroyRenderer(rend);
    SDL_DestroyWindow(window);
