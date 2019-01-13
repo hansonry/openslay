@@ -1,6 +1,16 @@
 #include <stdio.h>
 #include "SDL2/SDL.h"
 #include "SDL2/SDL_image.h"
+#include "imagedata.h"
+
+// States include
+#include "gamestate.h"
+
+
+enum state
+{
+   e_S_game
+};
 
 static void CheckForExit(const SDL_Event *event, int * done);
 
@@ -13,11 +23,7 @@ int main(int args, char * argc[])
    int ticks_previous, ticks_diff, ticks_now;
    float seconds;
 
-   SDL_Rect rect;
-
-   
-   SDL_Surface * surface_loading;
-   SDL_Texture * texture_sdl2d;
+   enum state state;
    
    
    SDL_Init(SDL_INIT_EVERYTHING);   
@@ -30,23 +36,34 @@ int main(int args, char * argc[])
                              SDL_RENDERER_PRESENTVSYNC);
    
 
-   
-   surface_loading = IMG_Load("sdl2d.png");
-   texture_sdl2d = SDL_CreateTextureFromSurface(rend, surface_loading);
-   SDL_FreeSurface(surface_loading);
-   SDL_QueryTexture(texture_sdl2d, NULL, NULL, &rect.w, &rect.h);
-   rect.x = (800 - rect.w) / 2;
-   rect.y = (600 - rect.h) / 2;
+   imagedata_load(rend);
 
    
    ticks_previous = SDL_GetTicks();
+
+   // state init
+   gamestate_init();
    
+
+   // loop setup
+   state = e_S_game;
+   gamestate_onenter();
    done = 0;
    while(done == 0)
    {
       while(SDL_PollEvent(&event))
       {
          CheckForExit(&event, &done);
+         switch(state)
+         {
+         case e_S_game:
+            gamestate_event(&event);
+            break;
+         default:
+            fprintf(stderr, "main: Unknown state %d for event\n", state);
+            break;
+             
+         }
       }
       
       ticks_now = SDL_GetTicks();
@@ -54,20 +71,50 @@ int main(int args, char * argc[])
       seconds = (float)ticks_diff / 1000.0f;
       ticks_previous = ticks_now;
 
-      seconds = seconds;
+      switch(state)
+      {
+      case e_S_game:
+         gamestate_update(seconds);
+         break;
+      default:
+         fprintf(stderr, "main: Unknown state %d for update\n", state);
+         break;
+      }
+
       
       
-      SDL_SetRenderDrawColor(rend, 0x00, 0x00, 0x00, 0xFF);
+      SDL_SetRenderDrawColor(rend, 0x00, 0x33, 0x66, 0xFF);
       SDL_RenderClear( rend );
 
-      SDL_RenderCopy(rend, texture_sdl2d, NULL, &rect);
+      switch(state)
+      {
+      case e_S_game:
+         gamestate_render(rend);
+         break;
+      default:
+         fprintf(stderr, "main: Unknown state %d for render\n", state);
+         break;
+      }
+
        
       
       SDL_RenderPresent(rend);
    }
+
+   switch(state)
+   {
+   case e_S_game:
+      gamestate_onexit();
+      break;
+   default:
+      fprintf(stderr, "main: Unknown state %d for exit\n", state);
+      break;
+   }
    
+   // state destroy
+   gamestate_destroy();
    
-   SDL_DestroyTexture(texture_sdl2d);
+   imagedata_free();
    
    SDL_DestroyRenderer(rend);
    SDL_DestroyWindow(window);
