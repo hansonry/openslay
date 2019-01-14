@@ -35,5 +35,7 @@ void             mapdata_clear(void);
 
 
 
+
+
 #endif // __MAPDATA_H__
 
