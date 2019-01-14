@@ -45,6 +45,7 @@ void gamestate_init(void)
    mapdata_addtile(2, 0)->owner = 2;
    mapdata_addtile(3, 0)->owner = 3;
    mapdata_addtile(4, 0)->owner = 4;
+   (void)mapdata_addtile(5, 0);
 
    mapdata_addtile(0, 1)->entity = e_ME_capital;
    mapdata_addtile(1, 1)->entity = e_ME_castle;
@@ -53,8 +54,8 @@ void gamestate_init(void)
    mapdata_addtile(4, 1)->entity = e_ME_knight;
    mapdata_addtile(5, 1)->entity = e_ME_baron;
 
-   (void)mapdata_addtile(0, 2);
-   (void)mapdata_addtile(1, 2);
+   mapdata_addtile(0, 2)->entity = e_ME_tree;
+   mapdata_addtile(1, 2)->entity = e_ME_palmtree;
    (void)mapdata_addtile(2, 2);
 
    gamestate_randomizemap();
@@ -185,10 +186,11 @@ void gamestate_render(SDL_Renderer * rend)
          text = NULL;
          break;
       case e_ME_tree:
-         text = NULL;
+         text = imagedata->trees;
          break;
       case e_ME_palmtree:
-         text = NULL;
+         text = imagedata->trees;
+         sr.x = 32;
          break;
       case e_ME_peasant:
          text = imagedata->unit;

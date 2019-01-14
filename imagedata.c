@@ -30,6 +30,7 @@ void imagedata_load(SDL_Renderer * rend)
    imagedata.unit       = imagedata_loadimage(rend, "assets/images/Unit.png");
    imagedata.capital    = imagedata_loadimage(rend, "assets/images/Capital.png");
    imagedata.castle     = imagedata_loadimage(rend, "assets/images/Castle.png");
+   imagedata.trees      = imagedata_loadimage(rend, "assets/images/trees.png");
    imagedata.bitmapfont = imagedata_loadimage(rend, "assets/images/bitmapfont.png");
 
 
