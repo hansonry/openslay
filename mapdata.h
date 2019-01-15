@@ -20,6 +20,15 @@ struct maptile
    int x;
    int y;
    int owner;
+   int cap_x;
+   int cap_y;
+};
+
+struct mapcapital
+{
+   int x;
+   int y;
+   int money;
 };
 
 void mapdata_init(void);

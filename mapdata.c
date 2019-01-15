@@ -5,46 +5,57 @@
 
 #define GROWBY 32
 
+
+
 struct mapdata
 {
-   struct maptile * base;
-   size_t size;
-   size_t count;
+   struct mdtilelist
+   {
+      struct maptile * base;
+      size_t size;
+      size_t count;
+   } tiles;
+   struct mdcapitallist
+   {
+      struct mapcapital * base;
+      size_t size;
+      size_t count;
+   } caps;
 };
 
 static struct mapdata data;
 
 void mapdata_init(void)
 {
-   data.size = GROWBY;
-   data.base = malloc(sizeof(struct maptile) * data.size);
-   data.count = 0;
+   data.tiles.size = GROWBY;
+   data.tiles.base = malloc(sizeof(struct maptile) * data.tiles.size);
+   data.tiles.count = 0;
 }
 
 void mapdata_destroy(void)
 {
-   free(data.base);
-   data.base = NULL;
+   free(data.tiles.base);
+   data.tiles.base = NULL;
 }
 
 int mapdata_count(void)
 {
-   return data.count;
+   return data.tiles.count;
 }
 
-static struct maptile * mapdata_find(int x, int y, size_t * index)
+static struct maptile * mapdata_findtile(int x, int y, size_t * index)
 {
    size_t i;
-   for(i = 0; i < data.count; i++)
+   for(i = 0; i < data.tiles.count; i++)
    {
-      if(data.base[i].x == x &&
-         data.base[i].y == y)
+      if(data.tiles.base[i].x == x &&
+         data.tiles.base[i].y == y)
       {
          if(index != NULL)
          {
             *index = i;
          }
-         return &data.base[i];
+         return &data.tiles.base[i];
       }
    }
    return NULL;
@@ -54,20 +65,21 @@ static struct maptile * mapdata_find(int x, int y, size_t * index)
 struct maptile * mapdata_addtile(int x, int y)
 {
    struct maptile * tile;
-   tile = mapdata_find(x, y, NULL);
+   tile = mapdata_findtile(x, y, NULL);
    if(tile != NULL)
    {
       return tile;
    }
 
-   if(data.count >= data.size)
+   if(data.tiles.count >= data.tiles.size)
    {
-      data.size = data.count + GROWBY;
-      data.base = realloc(data.base, sizeof(struct maptile) * data.size);
+      data.tiles.size = data.tiles.count + GROWBY;
+      data.tiles.base = realloc(data.tiles.base, 
+                                sizeof(struct maptile) * data.tiles.size);
    }
 
-   tile = &data.base[data.count];
-   data.count ++;
+   tile = &data.tiles.base[data.tiles.count];
+   data.tiles.count ++;
 
    tile->x = x;
    tile->y = y;
@@ -79,14 +91,14 @@ struct maptile * mapdata_addtile(int x, int y)
 
 struct maptile * mapdata_gettile(int x, int y)
 {
-   return mapdata_find(x, y, NULL);
+   return mapdata_findtile(x, y, NULL);
 }
 
 struct maptile * mapdata_getindex(int index)
 {
-   if(index >= 0 && index < data.count)
+   if(index >= 0 && index < data.tiles.count)
    {
-      return &data.base[index];
+      return &data.tiles.base[index];
    }
    return NULL;
 }
@@ -95,18 +107,18 @@ void             mapdata_removetile(int x, int y)
 {
    struct maptile * tile;
    size_t rindex;
-   tile = mapdata_find(x, y, &rindex);
+   tile = mapdata_findtile(x, y, &rindex);
    if(tile != NULL)
    {
-      data.count --;
-      memcpy(&data.base[rindex], 
-             &data.base[data.count], 
+      data.tiles.count --;
+      memcpy(&data.tiles.base[rindex], 
+             &data.tiles.base[data.tiles.count], 
              sizeof(struct maptile));
    }
 }
 
 void             mapdata_clear(void)
 {
-   data.count = 0;
+   data.tiles.count = 0;
 }
 
