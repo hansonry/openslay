@@ -36,10 +36,12 @@ static void gamestate_randomizemap(void)
 
 void gamestate_init(void)
 {
+   int x, y;
    imagedata = imagedata_get();
 
    mapdata_init();
 
+   /*
    mapdata_addtile(0, 0)->owner = 0;
    mapdata_addtile(1, 0)->owner = 1;
    mapdata_addtile(2, 0)->owner = 2;
@@ -59,6 +61,18 @@ void gamestate_init(void)
    (void)mapdata_addtile(2, 2);
 
    gamestate_randomizemap();
+   */
+   for(y = 0; y < 15; y ++)
+   {
+      for(x = 0; x < 15; x++)
+      {
+         (void)mapdata_addtile(x, y);
+      }
+   }
+
+   gamestate_randomizemap();
+
+   mapdata_fullclean();
 
 }
 
@@ -175,7 +189,7 @@ void gamestate_render(SDL_Renderer * rend)
 
       dr.x = tile->x * 23;
       dr.y = tile->y * 30;
-      if(tile->x % 2 == 1)
+      if(tile->x % 2 == 1) // Check for odd
       {
          dr.y += 15;
       }

@@ -22,6 +22,7 @@ struct maptile
    int owner;
    int cap_x;
    int cap_y;
+   int flags;
 };
 
 struct mapcapital
@@ -41,6 +42,8 @@ struct maptile * mapdata_gettile(int x, int y);
 struct maptile * mapdata_getindex(int index);
 void             mapdata_removetile(int x, int y);
 void             mapdata_clear(void);
+
+void             mapdata_fullclean(void);
 
 
 
