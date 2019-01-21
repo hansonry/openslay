@@ -14,8 +14,17 @@ static struct SDL_Color teamcolors[] =
 };
 
 static struct imagedata * imagedata;
-static SDL_Rect rect;
+static int hexmouse_x, hexmouse_y;
 
+
+static void gamestate_updatehexmouse(void)
+{
+   int x, y;
+   SDL_GetMouseState(&x, &y);
+   hexmouse_x = x / 23;
+   hexmouse_y = y / 30;
+
+}
 
 static void gamestate_randomizemap(void)
 {
@@ -62,6 +71,8 @@ void gamestate_init(void)
 
    gamestate_randomizemap();
    */
+
+   // Create a random square map
    for(y = 0; y < 15; y ++)
    {
       for(x = 0; x < 15; x++)
@@ -84,6 +95,7 @@ void gamestate_destroy(void)
 
 void gamestate_onenter(void)
 {
+   gamestate_updatehexmouse();
 }
 
 void gamestate_onexit(void)
@@ -135,18 +147,28 @@ static void drawtext(SDL_Renderer * rend, int x, int y, const char * text)
 
 }
 
+static void gamestate_hexposition(int x, int y, SDL_Rect * dest)
+{
+
+   // You may notice the off by one, that is due to the odd height 
+   // of the hexes; These numbers are also trial and error
+   // These are put into an odd-q vertical layout.
+   // See www.redblobgames.com/grids/hexagons/
+   dest->x = x * 23;
+   dest->y = y * 30;
+   if(x % 2 == 1)
+   {
+      dest->y += 15;
+   }
+}
 
 
 void gamestate_render(SDL_Renderer * rend)
 {
    int i, mapcount;
    struct maptile * tile;
-   rect.w = 32; rect.h = 32;
+   SDL_Rect sr, dr;
 
-   // Test Render
-   rect.x = (800 - rect.w) / 2;
-   rect.y = (600 - rect.h) / 2;
-   SDL_RenderCopy(rend, imagedata->hex, NULL, &rect);
 
    mapcount = mapdata_count();
 
@@ -155,22 +177,14 @@ void gamestate_render(SDL_Renderer * rend)
    {
       tile = mapdata_getindex(i);
 
-      // You may notice the off by one, that is due to the odd height 
-      // of the hexes; These numbers are also trial and error
-      // These are put into an odd-q vertical layout.
-      // See www.redblobgames.com/grids/hexagons/
-      rect.x = tile->x * 23;
-      rect.y = tile->y * 30;
-      if(tile->x % 2 == 1)
-      {
-         rect.y += 15;
-      }
+      dr.w = dr.h = 32;
+      gamestate_hexposition(tile->x, tile->y, &dr);
 
       SDL_SetTextureColorMod(imagedata->hex, 
                              teamcolors[tile->owner].r,
                              teamcolors[tile->owner].g,
                              teamcolors[tile->owner].b);
-      SDL_RenderCopy(rend, imagedata->hex, NULL, &rect);
+      SDL_RenderCopy(rend, imagedata->hex, NULL, &dr);
    }
 
   
@@ -178,7 +192,6 @@ void gamestate_render(SDL_Renderer * rend)
    
    for(i = 0; i < mapcount; i++)
    {
-      SDL_Rect sr, dr;
       SDL_Texture * text;
       
       tile = mapdata_getindex(i);
@@ -187,12 +200,8 @@ void gamestate_render(SDL_Renderer * rend)
       sr.x = sr.y = 0;
       dr.w = dr.h = 32;
 
-      dr.x = tile->x * 23;
-      dr.y = tile->y * 30;
-      if(tile->x % 2 == 1) // Check for odd
-      {
-         dr.y += 15;
-      }
+      gamestate_hexposition(tile->x, tile->y, &dr);
+
 
       switch(tile->entity)
       {
@@ -240,9 +249,22 @@ void gamestate_render(SDL_Renderer * rend)
 
 
 
+   // Test Render Mouse location
+
+   dr.w = dr.h = 32;
+   gamestate_hexposition(hexmouse_x, hexmouse_y, &dr);
+   SDL_SetTextureColorMod(imagedata->hex, 0xFF, 0xFF, 0xFF);
+   SDL_RenderCopy(rend, imagedata->hex, NULL, &dr);
+
+
+
 }
 
 void gamestate_event(SDL_Event * event)
 {
+   if(event->type == SDL_MOUSEMOTION)
+   {
+      gamestate_updatehexmouse();
+   }
 }
 
