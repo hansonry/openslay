@@ -47,6 +47,8 @@ void             mapdata_fullclean(void);
 
 
 
+void             mapdata_get6suroundingCoordinates(int x, int y, 
+                                                   int * xs_out, int * ys_out);
 
 
 #endif // __MAPDATA_H__

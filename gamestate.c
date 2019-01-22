@@ -12,17 +12,96 @@ static struct SDL_Color teamcolors[] =
    {0x80, 0x00, 0x00, 0xFF},
    {0x99, 0x33, 0x1A, 0xFF}
 };
+ 
 
 static struct imagedata * imagedata;
 static int hexmouse_x, hexmouse_y;
 
 
+static void gamestate_hexposition(int x, int y, SDL_Rect * dest)
+{
+
+   // You may notice the off by one, that is due to the odd height 
+   // of the hexes; These numbers are also trial and error
+   // These are put into an odd-q vertical layout.
+   // See www.redblobgames.com/grids/hexagons/
+   dest->x = x * 23;
+   dest->y = y * 30;
+   if(x % 2 == 1)
+   {
+      dest->y += 15;
+   }
+}
+
+int pnpoly(int nvert, float *vertx, float *verty, float testx, float testy)
+{
+   int i, j, c = 0;
+   for (i = 0, j = nvert-1; i < nvert; j = i++) 
+   {
+      if ( ((verty[i] > testy) != (verty[j] > testy)) &&
+           (testx < (vertx[j]-vertx[i]) * (testy-verty[i]) / (verty[j]-verty[i]) + vertx[i]) )
+      {
+         c = !c;
+      }
+   }
+   return c;
+}
+
+static int gamestate_inhex(int x, int y, int tilex, int tiley)
+{
+   SDL_Rect r;
+   float hx[] = {8, 23, 31, 23,  8, 0  };
+   float hy[] = {1,  1, 16, 31, 31, 16 };
+   gamestate_hexposition(tilex, tiley, &r);
+
+   // A sneeky thing we are doing here is to translate
+   // the coordinates of the point based on the tile position
+   if(pnpoly(6, hx, hy, x - r.x, y - r.y))
+   {
+      return 1;
+   }
+   return 0;
+}
+
 static void gamestate_updatehexmouse(void)
 {
    int x, y;
+
+   int ex, ey;
+   int px[6], py[6];
+   int i;
+
+   // 23 wide and 30 tall
+
    SDL_GetMouseState(&x, &y);
-   hexmouse_x = x / 23;
-   hexmouse_y = y / 30;
+
+   // Estimate y and x
+   ex = x / 23;
+   if(ex % 2 == 0)
+   {
+      ey = y / 30;
+   }
+   else
+   {
+      ey = (y - 15) / 30;
+   }
+
+   // Using our estamets lets pick the nebors
+   mapdata_get6suroundingCoordinates(ex, ey, px, py);
+
+   // Assume the estimate if no hits are found
+   hexmouse_x = ex;
+   hexmouse_y = ey;
+
+   for(i = 0; i < 6; i++)
+   {
+      if(gamestate_inhex(x, y, px[i], py[i]))
+      {
+         hexmouse_x = px[i];
+         hexmouse_y = py[i];
+         break;
+      }
+   }
 
 }
 
@@ -147,21 +226,19 @@ static void drawtext(SDL_Renderer * rend, int x, int y, const char * text)
 
 }
 
-static void gamestate_hexposition(int x, int y, SDL_Rect * dest)
+
+static void gamestate_rendermousedebug(SDL_Renderer * rend)
 {
+   SDL_Rect dr;
+   // Test Render Mouse location
 
-   // You may notice the off by one, that is due to the odd height 
-   // of the hexes; These numbers are also trial and error
-   // These are put into an odd-q vertical layout.
-   // See www.redblobgames.com/grids/hexagons/
-   dest->x = x * 23;
-   dest->y = y * 30;
-   if(x % 2 == 1)
-   {
-      dest->y += 15;
-   }
+   dr.w = dr.h = 32;
+   gamestate_hexposition(hexmouse_x, hexmouse_y, &dr);
+   SDL_SetTextureColorMod(imagedata->hex, 0xFF, 0xFF, 0xFF);
+   SDL_SetTextureAlphaMod(imagedata->hex, 0xA0);
+   SDL_RenderCopy(rend, imagedata->hex, NULL, &dr);
+   SDL_SetTextureAlphaMod(imagedata->hex, 0xFF);
 }
-
 
 void gamestate_render(SDL_Renderer * rend)
 {
@@ -245,16 +322,11 @@ void gamestate_render(SDL_Renderer * rend)
    }
 
 
-   drawtext(rend, 100, 100, "Hi MOM! 0123456789");
+   drawtext(rend, 400, 100, "Hi MOM! 0123456789");
 
 
 
-   // Test Render Mouse location
-
-   dr.w = dr.h = 32;
-   gamestate_hexposition(hexmouse_x, hexmouse_y, &dr);
-   SDL_SetTextureColorMod(imagedata->hex, 0xFF, 0xFF, 0xFF);
-   SDL_RenderCopy(rend, imagedata->hex, NULL, &dr);
+   gamestate_rendermousedebug(rend);
 
 
 

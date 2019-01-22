@@ -136,7 +136,7 @@ void             mapdata_clear(void)
 }
 
 
-static void      mapdata_get6suroundingCoordinates(int x, int y, 
+void             mapdata_get6suroundingCoordinates(int x, int y, 
                                                    int * xs_out, int * ys_out)
 {
    static int xevenoffsets[] = {  0,  1,  1,  0, -1, -1 };

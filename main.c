@@ -27,7 +27,7 @@ int main(int args, char * argc[])
    
    
    SDL_Init(SDL_INIT_EVERYTHING);   
-   window = SDL_CreateWindow("SDL 2D", 
+   window = SDL_CreateWindow("Open Slay", 
                              SDL_WINDOWPOS_CENTERED, 
                              SDL_WINDOWPOS_CENTERED, 
                              800, 600, SDL_WINDOW_SHOWN);
