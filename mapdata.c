@@ -1,6 +1,7 @@
 #include "mapdata.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 
 #define GROWBY 32
@@ -143,7 +144,7 @@ void             mapdata_get6suroundingCoordinates(int x, int y,
    static int yevenoffsets[] = { -1, -1,  0,  1,  0, -1 };
 
    static int xoddoffsets[]  = {  0,  1,  1,  0, -1, -1 };
-   static int yoddoffsets[]  = { -1,  0,  1,  1, -1,  0 };
+   static int yoddoffsets[]  = { -1,  0,  1,  1,  1,  0 };
 
    int * xoffset, * yoffset, i;
 
@@ -359,6 +360,44 @@ void             mapdata_fullclean(void)
          }
       }
    }
+
+   // Go though all tiles and set them to unsearched
+
+   for(i = 0; i < data.tiles.count; i++)
+   {
+      tile = &data.tiles.base[i];
+      tile->flags = FLAGS_HASACTIVATED;
+   }
+
+   // Count The area for each captital and setup the income 
+   for(i = 0; i < data.caps.count; i++)
+   {
+      cap = &data.caps.base[i];
+      tile = mapdata_gettile(cap->x, cap->y);
+      if(tile == NULL)
+      {
+         fprintf(stderr, "mapdata_fullclean: Error Unexpected NULL Tile\n");
+         return;
+      }
+      cap->income = mapdata_paintcapital(tile);
+   }
+}
+
+struct mapcapital * mapdata_getcapital(int x, int y)
+{
+   struct mapcapital * cap, *t;
+   size_t i;
+   cap = NULL;
+   for(i = 0; i < data.caps.count; i++)
+   {
+      t = &data.caps.base[i];
+      if(t->x == x && t->y == y)
+      {
+         cap = t;
+         break;
+      }
+   }
+   return cap;
 }
 
 

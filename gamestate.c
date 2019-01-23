@@ -16,7 +16,7 @@ static struct SDL_Color teamcolors[] =
 
 static struct imagedata * imagedata;
 static int hexmouse_x, hexmouse_y;
-
+static int capital_selected, cap_x, cap_y;
 
 static void gamestate_hexposition(int x, int y, SDL_Rect * dest)
 {
@@ -175,6 +175,7 @@ void gamestate_destroy(void)
 void gamestate_onenter(void)
 {
    gamestate_updatehexmouse();
+   capital_selected = 0;
 }
 
 void gamestate_onexit(void)
@@ -238,6 +239,24 @@ static void gamestate_rendermousedebug(SDL_Renderer * rend)
    SDL_SetTextureAlphaMod(imagedata->hex, 0xA0);
    SDL_RenderCopy(rend, imagedata->hex, NULL, &dr);
    SDL_SetTextureAlphaMod(imagedata->hex, 0xFF);
+}
+
+static void gamestate_renderui(SDL_Renderer * rend)
+{
+   char text[128];
+   struct mapcapital * cap;
+
+   if(capital_selected)
+   {
+      cap = mapdata_getcapital(cap_x, cap_y);
+      if(cap != NULL)
+      {
+         sprintf(text, "Money: %d", cap->money);
+         drawtext(rend, 400, 20, text);
+         sprintf(text, "Income: %d", cap->income);
+         drawtext(rend, 400, 48, text);
+      }
+   }
 }
 
 void gamestate_render(SDL_Renderer * rend)
@@ -328,8 +347,49 @@ void gamestate_render(SDL_Renderer * rend)
 
    gamestate_rendermousedebug(rend);
 
+   // Render UI
+   gamestate_renderui(rend);
 
 
+}
+
+static int gamestate_maptilehascaptital(struct maptile * tile)
+{
+   if(tile->x == tile->cap_x && tile->y == tile->cap_y)
+   {
+      if(tile->entity == e_ME_capital)
+      {
+         return 1;
+      }
+      else
+      {
+         return 0;
+      }
+   }
+   else
+   {
+      // Problably has a capital because this territory has more than
+      // one tile
+      return 1;
+   }
+}
+
+static void gamestate_eventleftmouse(int button_state)
+{
+   struct maptile * tile;
+   if(button_state == SDL_PRESSED)
+   {
+      tile = mapdata_gettile(hexmouse_x, hexmouse_y);
+      if(tile != NULL && gamestate_maptilehascaptital(tile))
+      {
+         capital_selected = 1;
+         cap_x = tile->cap_x;
+         cap_y = tile->cap_y;
+      }
+   }
+   else if(button_state == SDL_RELEASED)
+   {
+   }
 }
 
 void gamestate_event(SDL_Event * event)
@@ -337,6 +397,19 @@ void gamestate_event(SDL_Event * event)
    if(event->type == SDL_MOUSEMOTION)
    {
       gamestate_updatehexmouse();
+   }
+
+   if(event->type == SDL_MOUSEBUTTONDOWN ||
+      event->type == SDL_MOUSEBUTTONUP)
+   {
+      gamestate_updatehexmouse();
+      if(event->button.button == SDL_BUTTON_LEFT)
+      {
+         gamestate_eventleftmouse(event->button.state);
+      }
+      else if(event->button.button == SDL_BUTTON_RIGHT)
+      {
+      }
    }
 }
 

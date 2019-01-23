@@ -30,6 +30,7 @@ struct mapcapital
    int x;
    int y;
    int money;
+   int income;
 };
 
 void mapdata_init(void);
@@ -44,6 +45,8 @@ void             mapdata_removetile(int x, int y);
 void             mapdata_clear(void);
 
 void             mapdata_fullclean(void);
+
+struct mapcapital * mapdata_getcapital(int x, int y);
 
 
 
