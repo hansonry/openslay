@@ -10,6 +10,7 @@ enum mapentity
    e_ME_spearman,
    e_ME_knight,
    e_ME_baron,
+   e_ME_grave,
    e_ME_capital,
    e_ME_castle
 };
@@ -30,7 +31,7 @@ struct mapcapital
    int x;
    int y;
    int money;
-   int income;
+   int size;
 };
 
 void mapdata_init(void);
@@ -48,10 +49,17 @@ void             mapdata_fullclean(void);
 
 struct mapcapital * mapdata_getcapital(int x, int y);
 
+void             mapdata_setmoneyallcapitals(int amount);
 
+
+void             mapdata_setcanmove(struct maptile * tile, int flag);
+int              mapdata_getcanmove(struct maptile * tile);
 
 void             mapdata_get6suroundingCoordinates(int x, int y, 
                                                    int * xs_out, int * ys_out);
+
+void             mapdata_taketile(struct maptile * tile, int new_owner, 
+                                  int new_cap_x, int new_cap_y);
 
 
 #endif // __MAPDATA_H__

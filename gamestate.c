@@ -18,6 +18,19 @@ static struct imagedata * imagedata;
 static int hexmouse_x, hexmouse_y;
 static int capital_selected, cap_x, cap_y;
 
+struct grabbed
+{
+// This will be used to determine what unit is grabbed by the mouse
+// only valid values will be e_ME_none e_ME_peasant e_ME_spearman
+// e_ME_knight e_ME_baron
+   enum mapentity entity;
+   int cap_x;
+   int cap_y;
+   int owner;
+};
+
+static struct grabbed grabbed;
+
 static void gamestate_hexposition(int x, int y, SDL_Rect * dest)
 {
 
@@ -164,6 +177,8 @@ void gamestate_init(void)
 
    mapdata_fullclean();
 
+   mapdata_setmoneyallcapitals(10);
+
 }
 
 void gamestate_destroy(void)
@@ -176,6 +191,7 @@ void gamestate_onenter(void)
 {
    gamestate_updatehexmouse();
    capital_selected = 0;
+   grabbed.entity = e_ME_none;
 }
 
 void gamestate_onexit(void)
@@ -253,10 +269,61 @@ static void gamestate_renderui(SDL_Renderer * rend)
       {
          sprintf(text, "Money: %d", cap->money);
          drawtext(rend, 400, 20, text);
-         sprintf(text, "Income: %d", cap->income);
+         sprintf(text, "Size: %d", cap->size);
          drawtext(rend, 400, 48, text);
       }
    }
+}
+
+static SDL_Texture * gamestate_getUnitTexture(enum mapentity entity, SDL_Rect * sr)
+{
+   SDL_Texture * text;
+   SDL_Rect isr;
+   isr.x = isr.y = 0;
+   isr.w = isr.h = 32;
+   switch(entity)
+   {
+   default:
+      text = NULL;
+      break;
+   case e_ME_tree:
+      text = imagedata->trees;
+      break;
+   case e_ME_palmtree:
+      text = imagedata->trees;
+      isr.x = 32;
+      break;
+   case e_ME_peasant:
+      text = imagedata->unit;
+      SDL_SetTextureColorMod(imagedata->unit, 0xFF, 0xFF, 0xFF);
+      break;
+   case e_ME_spearman:
+      text = imagedata->unit;
+      SDL_SetTextureColorMod(imagedata->unit, 0x34, 0x98, 0xDB);
+      break;
+   case e_ME_knight:
+      text = imagedata->unit;
+      SDL_SetTextureColorMod(imagedata->unit, 0xE6, 0x7E, 0x22);
+      break;
+   case e_ME_baron:
+      text = imagedata->unit;
+      SDL_SetTextureColorMod(imagedata->unit, 0xD0, 0x29, 0x1B);
+      break;
+   case e_ME_capital:
+      text = imagedata->capital;
+      break;
+   case e_ME_castle:
+      text = imagedata->castle;
+      break;
+   }
+   if(sr != NULL)
+   {
+      sr->x = isr.x;
+      sr->y = isr.y;
+      sr->w = isr.w;
+      sr->h = isr.h;
+   }
+   return text;
 }
 
 void gamestate_render(SDL_Renderer * rend)
@@ -264,6 +331,7 @@ void gamestate_render(SDL_Renderer * rend)
    int i, mapcount;
    struct maptile * tile;
    SDL_Rect sr, dr;
+   SDL_Texture * text;
 
 
    mapcount = mapdata_count();
@@ -288,52 +356,15 @@ void gamestate_render(SDL_Renderer * rend)
    
    for(i = 0; i < mapcount; i++)
    {
-      SDL_Texture * text;
       
       tile = mapdata_getindex(i);
 
-      sr.w = sr.h = 32;
-      sr.x = sr.y = 0;
       dr.w = dr.h = 32;
 
       gamestate_hexposition(tile->x, tile->y, &dr);
 
 
-      switch(tile->entity)
-      {
-      default:
-         text = NULL;
-         break;
-      case e_ME_tree:
-         text = imagedata->trees;
-         break;
-      case e_ME_palmtree:
-         text = imagedata->trees;
-         sr.x = 32;
-         break;
-      case e_ME_peasant:
-         text = imagedata->unit;
-         SDL_SetTextureColorMod(imagedata->unit, 0xFF, 0xFF, 0xFF);
-         break;
-      case e_ME_spearman:
-         text = imagedata->unit;
-         SDL_SetTextureColorMod(imagedata->unit, 0x34, 0x98, 0xDB);
-         break;
-      case e_ME_knight:
-         text = imagedata->unit;
-         SDL_SetTextureColorMod(imagedata->unit, 0xE6, 0x7E, 0x22);
-         break;
-      case e_ME_baron:
-         text = imagedata->unit;
-         SDL_SetTextureColorMod(imagedata->unit, 0xD0, 0x29, 0x1B);
-         break;
-      case e_ME_capital:
-         text = imagedata->capital;
-         break;
-      case e_ME_castle:
-         text = imagedata->castle;
-         break;
-      }
+      text = gamestate_getUnitTexture(tile->entity, &sr);
       if(text != NULL)
       {
          SDL_RenderCopy(rend, text, &sr, &dr);
@@ -346,6 +377,18 @@ void gamestate_render(SDL_Renderer * rend)
 
 
    gamestate_rendermousedebug(rend);
+
+   // Render Grabbed
+
+   if(grabbed.entity != e_ME_none)
+   {
+      text = gamestate_getUnitTexture(grabbed.entity, &sr);
+      if(text != NULL)
+      {
+         SDL_GetMouseState(&dr.x, &dr.y);
+         SDL_RenderCopy(rend, text, &sr, &dr);
+      }
+   }
 
    // Render UI
    gamestate_renderui(rend);
@@ -374,21 +417,264 @@ static int gamestate_maptilehascaptital(struct maptile * tile)
    }
 }
 
+static int gamestate_wincheck(enum mapentity attacker, 
+                              enum mapentity defender)
+{
+   int win;
+   if(attacker == e_ME_baron)
+   {
+      switch(defender)
+      {
+      default:
+         win = 1;
+         break;
+      case e_ME_baron:
+         win = 0;
+         break;
+      }
+   }
+   else if(attacker == e_ME_knight)
+   {
+      switch(defender)
+      {
+      default:
+         win = 1;
+         break;
+      case e_ME_baron:
+      case e_ME_knight:
+         win = 0;
+         break;
+      }
+   }
+   else if(attacker == e_ME_spearman)
+   {
+      switch(defender)
+      {
+      default:
+         win = 1;
+         break;
+      case e_ME_baron:
+      case e_ME_knight:
+      case e_ME_spearman:
+      case e_ME_castle:
+         win = 0;
+         break;
+      }
+   }
+   else if(attacker == e_ME_peasant)
+   {
+      switch(defender)
+      {
+      default:
+         win = 1;
+         break;
+      case e_ME_baron:
+      case e_ME_knight:
+      case e_ME_spearman:
+      case e_ME_castle:
+      case e_ME_peasant:
+      case e_ME_capital:
+         win = 0;
+         break;
+      }
+   }
+   else
+   {
+      win = 0;
+   }
+   return win;
+}
+
+static enum mapentity gamestate_sumunit(enum mapentity e1, enum mapentity e2)
+{
+   enum mapentity result;
+   enum mapentity e[2];
+   int v[2];
+   int vr;
+   int i;
+   
+   e[0] = e1;
+   e[1] = e2;
+   for(i = 0; i < 2; i++)
+   {
+      switch(e[i])
+      {
+      default:            v[i] = 0; break;
+      case e_ME_peasant:  v[i] = 1; break; 
+      case e_ME_spearman: v[i] = 2; break; 
+      case e_ME_knight:   v[i] = 3; break; 
+      case e_ME_baron:    v[i] = 4; break; 
+      }
+   }
+
+   vr = v[0] + v[1];
+
+   switch(vr)
+   {
+   case 0:  result = e_ME_none;     break;
+   case 1:  result = e_ME_peasant;  break;
+   case 2:  result = e_ME_spearman; break;
+   case 3:  result = e_ME_knight;   break;
+   case 4:  result = e_ME_baron;    break;
+   default: result = e_ME_grave;    break;
+   }
+
+   return result;
+}
+
+static void gamestate_attempttoplace(struct maptile * tile)
+{
+   int sx[6];
+   int sy[6];
+   int i;
+   int win;
+   int canmove_flag;
+   struct maptile * ntile;
+   enum mapentity entity;
+
+   if(tile->cap_x == grabbed.cap_x && 
+      tile->cap_y == grabbed.cap_y)
+   {
+      switch(tile->entity)
+      {
+      case e_ME_none:
+         mapdata_setcanmove(tile, 1);
+         tile->entity = grabbed.entity;
+         grabbed.entity = e_ME_none;
+         break;
+      case e_ME_tree:
+      case e_ME_palmtree:
+      case e_ME_grave:
+         mapdata_setcanmove(tile, 0);
+         tile->entity = grabbed.entity;
+         grabbed.entity = e_ME_none;
+         break;
+      case e_ME_peasant:
+      case e_ME_spearman:
+      case e_ME_knight:
+      case e_ME_baron:
+         
+         entity = gamestate_sumunit(tile->entity, grabbed.entity);
+         if(entity != e_ME_grave && entity != e_ME_none)
+         {
+            tile->entity = entity;
+            grabbed.entity = e_ME_none;
+         }
+         break;
+      default:
+         // Do Nothing on purpose
+         // Not a valid spot to drop a unit
+         break;
+      }
+   }
+   else
+   {
+      mapdata_get6suroundingCoordinates(tile->x, tile->y, sx, sy);
+
+      // Check to see if the move is possible
+      win = gamestate_wincheck(grabbed.entity, tile->entity);
+      if(win == 1)
+      {
+         canmove_flag = 1;
+         for(i = 0; i < 6; i++)
+         {
+            ntile = mapdata_gettile(sx[i], sy[i]);
+            if(ntile == NULL)
+            {
+               continue;
+            }
+            win = gamestate_wincheck(grabbed.entity, ntile->entity);
+            if(win == 0 && ntile->owner == tile->owner)
+            {
+               canmove_flag = 0;
+               break;
+            }
+            
+         }
+      }
+      else
+      {
+         canmove_flag = 0;
+      }
+
+      if(canmove_flag == 1)
+      {
+         mapdata_taketile(tile, grabbed.owner, grabbed.cap_x, grabbed.cap_y);
+         tile->cap_x = grabbed.cap_x;
+         tile->cap_y = grabbed.cap_y;
+         tile->entity = grabbed.entity;
+         mapdata_setcanmove(tile, 0);
+
+         grabbed.entity = e_ME_none;
+
+      }
+
+   }
+}
+
 static void gamestate_eventleftmouse(int button_state)
 {
    struct maptile * tile;
    if(button_state == SDL_PRESSED)
    {
       tile = mapdata_gettile(hexmouse_x, hexmouse_y);
-      if(tile != NULL && gamestate_maptilehascaptital(tile))
+      if(grabbed.entity == e_ME_none)
       {
-         capital_selected = 1;
-         cap_x = tile->cap_x;
-         cap_y = tile->cap_y;
+         if(tile != NULL && gamestate_maptilehascaptital(tile))
+         {
+            capital_selected = 1;
+            cap_x = tile->cap_x;
+            cap_y = tile->cap_y;
+            if((tile->entity == e_ME_peasant ||
+                tile->entity == e_ME_spearman ||
+                tile->entity == e_ME_knight ||
+                tile->entity == e_ME_baron) &&
+                mapdata_getcanmove(tile) == 1)
+            {
+               grabbed.entity = tile->entity;
+               grabbed.owner = tile->owner;
+               grabbed.cap_x = tile->cap_x;
+               grabbed.cap_y = tile->cap_y;
+
+               tile->entity = e_ME_none;
+            }
+         }
+      }
+      else
+      {
+         if(tile != NULL)
+         {
+            gamestate_attempttoplace(tile);
+         }
       }
    }
    else if(button_state == SDL_RELEASED)
    {
+   }
+}
+
+static void gamestate_eventrightmouse(int button_state)
+{
+   struct mapcapital * cap;
+   struct maptile * tile;
+   if(button_state == SDL_PRESSED)
+   {
+      if(capital_selected == 1)
+      {
+         cap = mapdata_getcapital(cap_x, cap_y);
+         tile = mapdata_gettile(cap_x, cap_y);
+         if(cap != NULL && cap->money >= 10)
+         {
+            cap->money -= 10;
+            grabbed.entity = e_ME_peasant;
+            grabbed.cap_x = cap_x;
+            grabbed.cap_y = cap_y;
+            if(tile != NULL)
+            {
+               grabbed.owner = tile->owner;
+            }
+         }
+      }
    }
 }
 
@@ -409,6 +695,7 @@ void gamestate_event(SDL_Event * event)
       }
       else if(event->button.button == SDL_BUTTON_RIGHT)
       {
+         gamestate_eventrightmouse(event->button.state);
       }
    }
 }

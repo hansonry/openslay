@@ -7,7 +7,7 @@
 #define GROWBY 32
 
 #define FLAGS_SEARCHED      0x01
-#define FLAGS_HASACTIVATED  0x02
+#define FLAGS_CANMOVE  0x02
 
 
 struct mapdata
@@ -243,7 +243,7 @@ void             mapdata_fullclean(void)
       tile = &data.tiles.base[i];
       tile->cap_x = tile->x;
       tile->cap_y = tile->y;
-      tile->flags = FLAGS_HASACTIVATED;
+      tile->flags = FLAGS_CANMOVE;
    }
 
    // Find each captial and paint out. Remove captials that
@@ -366,7 +366,7 @@ void             mapdata_fullclean(void)
    for(i = 0; i < data.tiles.count; i++)
    {
       tile = &data.tiles.base[i];
-      tile->flags = FLAGS_HASACTIVATED;
+      tile->flags = FLAGS_CANMOVE;
    }
 
    // Count The area for each captital and setup the income 
@@ -379,7 +379,7 @@ void             mapdata_fullclean(void)
          fprintf(stderr, "mapdata_fullclean: Error Unexpected NULL Tile\n");
          return;
       }
-      cap->income = mapdata_paintcapital(tile);
+      cap->size = mapdata_paintcapital(tile);
    }
 }
 
@@ -400,4 +400,48 @@ struct mapcapital * mapdata_getcapital(int x, int y)
    return cap;
 }
 
+void             mapdata_setmoneyallcapitals(int amount)
+{
+   struct mapcapital * cap;
+   size_t i;
+   for(i = 0; i < data.caps.count; i++)
+   {
+      cap = &data.caps.base[i];
+      cap->money = amount;
+   }
+}
+
+void             mapdata_setcanmove(struct maptile * tile, int flag)
+{
+   if(flag)
+   {
+      tile->flags |= FLAGS_CANMOVE;
+   }
+   else
+   {
+      tile->flags &= ~FLAGS_CANMOVE;
+   }
+}
+
+int              mapdata_getcanmove(struct maptile * tile)
+{
+   if((tile->flags & FLAGS_CANMOVE) == FLAGS_CANMOVE)
+   {
+      return 1;
+   }
+   else
+   {
+      return 0;
+   }
+}
+
+void             mapdata_taketile(struct maptile * tile, int new_owner, 
+                                  int new_cap_x, int new_cap_y)
+{
+   // 1. Handel the opponent losses
+   // 1.a. Check to see if we split the oppent's terratory
+
+
+   // 2. Handel the gains from the move
+}
 
