@@ -168,6 +168,94 @@ void             mapdata_get6suroundingCoordinates(int x, int y,
 
 }
 
+void mapdata_updateupkeep(void)
+{
+   size_t i, k;
+   struct mapcapital * cap;
+   struct maptile * tile;
+   for(i = 0; i < data.caps.count; i++)
+   {
+      cap = &data.caps.base[i];
+      cap->upkeep = 0;
+   }
+
+   for(i = 0; i < data.tiles.count; i++)
+   {
+      int upkeep;
+      tile = &data.tiles.base[i];
+      switch(tile->entity)
+      {
+      default: 
+         upkeep = 0;
+         break;
+      case e_ME_peasant:
+         upkeep = 2;
+         break;
+      case e_ME_spearman:
+         upkeep = 6;
+         break;
+      case e_ME_knight:
+         upkeep = 18;
+         break;
+      case e_ME_baron:
+         upkeep = 54;
+         break;
+      }
+      if(upkeep > 0)
+      {
+         for(k = 0; k < data.caps.count; k++)
+         {
+            cap = &data.caps.base[k];
+            if(cap->x == tile->cap_x && cap->y == tile->cap_y)
+            {
+               cap->upkeep += upkeep;
+               break;
+            }
+         }
+      }
+   }
+}
+static void mapdata_updateincome(void)
+{
+   size_t i, k;
+   struct mapcapital * cap;
+   struct maptile * tile;
+   for(i = 0; i < data.caps.count; i++)
+   {
+      cap = &data.caps.base[i];
+      cap->income = 0;
+   }
+
+   for(i = 0; i < data.tiles.count; i++)
+   {
+      tile = &data.tiles.base[i];
+      switch(tile->entity)
+      {
+      default: 
+         // Do nothing on purpose
+         break;
+      case e_ME_none:
+      case e_ME_capital:
+      case e_ME_castle:
+      case e_ME_grave: // Not sure if this matches the original game
+      case e_ME_peasant:
+      case e_ME_spearman:
+      case e_ME_knight:
+      case e_ME_baron:
+         for(k = 0; k < data.caps.count; k++)
+         {
+            cap = &data.caps.base[k];
+            if(cap->x == tile->cap_x && cap->y == tile->cap_y)
+            {
+               cap->income ++;
+               break;
+            }
+         }
+         break;
+      }
+   }
+}
+
 static struct mapcapital * mapdata_addcapital(size_t * index)
 {
    struct mapcapital * cap;
@@ -389,6 +477,9 @@ void             mapdata_fullclean(void)
       }
       cap->size = mapdata_paintcapital(tile);
    }
+
+   // update the incomes
+   mapdata_updateincome();
 }
 
 struct mapcapital * mapdata_getcapital(int x, int y)
@@ -451,6 +542,7 @@ void             mapdata_taketile(struct maptile * tile, int new_owner,
    struct mapcapital * cap, * largest_cap;
    int old_cap_x, old_cap_y;
    int money;
+   size_t largest_cap_index;
 
    // 1. Handel the opponent losses
    // 1.a. Check to see if we split the oppent's terratory
@@ -475,7 +567,16 @@ void             mapdata_taketile(struct maptile * tile, int new_owner,
    if(tile->entity == e_ME_capital)
    {
       // If we have, we need to remove the capital
-      mapdata_removecapital(i);
+      for(i = 0; i < data.caps.count; i++)
+      {
+         cap = &data.caps.base[i];
+         if(cap->x == tile->x &&
+            cap->y == tile->y)
+         {
+            mapdata_removecapital(i);
+            break;
+         }
+      }
    }
       
    // Search the old owner captial, if we find it, then recalculate
@@ -544,6 +645,7 @@ void             mapdata_taketile(struct maptile * tile, int new_owner,
    {
       // This removes all other captial tiles and sets all connected tiles
       // to the source capital
+      //printf("Reset all capitals to %d %d\n", cap->x, cap->y);
       (void)mapdata_paintcapital(ltile);
       ltile->entity = e_ME_none;
 
@@ -567,19 +669,25 @@ void             mapdata_taketile(struct maptile * tile, int new_owner,
          ltile->cap_y == new_cap_y)
       {
          struct mapcapital *smaller_cap;
+         int smaller_index;
          money += cap->money;
          smaller_cap = cap;
+         smaller_index = i;
+         //printf("Found Cap %d %d at size %d\n", cap->x, cap->y, cap->size);
          if(largest_cap == NULL || cap->size > largest_cap->size)
          {
             smaller_cap = largest_cap;
+            smaller_index = largest_cap_index;
+            largest_cap_index = i;
             largest_cap = cap;
          }
 
          if(smaller_cap != NULL)
          {
-            // This is a smaller capital
+            // A smaller capital has been picked
             // So we will remove it from the capital list
-            mapdata_removecapital(i);
+            //printf("Removeing Cap %d %d at size %d\n", smaller_cap->x, smaller_cap->y, smaller_cap->size);
+            mapdata_removecapital(smaller_index);
          }
          
       }
@@ -599,7 +707,11 @@ void             mapdata_taketile(struct maptile * tile, int new_owner,
    if(ltile != NULL)
    {
       ltile->entity = e_ME_capital;
+      ltile->cap_x = ltile->x;
+      ltile->cap_y = ltile->y;
       largest_cap->size = mapdata_paintcapital(ltile);
    }
+
+   mapdata_updateincome();
 }
 

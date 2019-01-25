@@ -271,6 +271,10 @@ static void gamestate_renderui(SDL_Renderer * rend)
          drawtext(rend, 400, 20, text);
          sprintf(text, "Size: %d", cap->size);
          drawtext(rend, 400, 48, text);
+         sprintf(text, "Income: %d", cap->income);
+         drawtext(rend, 400, 76, text);
+         sprintf(text, "Upkeep: %d", -cap->upkeep);
+         drawtext(rend, 400, 104, text);
       }
    }
 }
@@ -372,7 +376,7 @@ void gamestate_render(SDL_Renderer * rend)
    }
 
 
-   drawtext(rend, 400, 100, "Hi MOM! 0123456789");
+   drawtext(rend, 400, 150, "Hi MOM! 0123456789");
 
 
 
@@ -605,9 +609,13 @@ static void gamestate_attempttoplace(struct maptile * tile)
 
          grabbed.entity = e_ME_none;
 
-      }
+         // Use check the tile for the new owner
+         cap_x = tile->cap_x;
+         cap_y = tile->cap_y;
 
+      }
    }
+   mapdata_updateupkeep();
 }
 
 static void gamestate_eventleftmouse(int button_state)

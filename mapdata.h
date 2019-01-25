@@ -31,6 +31,8 @@ struct mapcapital
    int x;
    int y;
    int money;
+   int income;
+   int upkeep;
    int size;
 };
 
@@ -61,6 +63,7 @@ void             mapdata_get6suroundingCoordinates(int x, int y,
 void             mapdata_taketile(struct maptile * tile, int new_owner, 
                                   int new_cap_x, int new_cap_y);
 
+void             mapdata_updateupkeep(void);
 
 #endif // __MAPDATA_H__
 
