@@ -168,6 +168,36 @@ void             mapdata_get6suroundingCoordinates(int x, int y,
 
 }
 
+static struct mapcapital * mapdata_addcapital(size_t * index)
+{
+   struct mapcapital * cap;
+   if(data.caps.count >= data.caps.size)
+   {
+      data.caps.size = data.caps.count + GROWBY;
+      data.caps.base = realloc(data.caps.base, 
+                               sizeof(struct mapcapital) * data.caps.size);
+   }
+
+   cap = &data.caps.base[data.caps.count];
+
+   if(index != NULL)
+   {
+      *index = data.caps.count;
+   }
+
+   data.caps.count ++;
+   return cap;
+}
+
+static void mapdata_removecapital(size_t index)
+{
+   data.caps.count --;
+   memcpy(&data.caps.base[index], 
+          &data.caps.base[data.caps.count], 
+          sizeof(struct mapcapital));
+}
+
+
 static int       mapdata_paintcapital(struct maptile * tile)
 {
    struct maptile * subtile;
@@ -228,10 +258,7 @@ void             mapdata_fullclean(void)
          tile->entity != e_ME_capital)
       {
          // It's a fake capital, lets remove it
-         data.caps.count --;
-         memcpy(&data.caps.base[i], 
-                &data.caps.base[data.caps.count], 
-                sizeof(struct mapcapital));
+         mapdata_removecapital(i);
       }
    }
 
@@ -267,10 +294,7 @@ void             mapdata_fullclean(void)
                if(cap->x == tile->x &&
                   cap->y == tile->y)
                {
-                  data.caps.count --;
-                  memcpy(&data.caps.base[k], 
-                         &data.caps.base[data.caps.count], 
-                         sizeof(struct mapcapital));
+                  mapdata_removecapital(k);
                   break;
                }
             }
@@ -298,15 +322,7 @@ void             mapdata_fullclean(void)
             // TODO: Place a capital in a nice place
             // We should have a capital here, so add a capital
             // Grow the data if nessary
-            if(data.caps.count >= data.caps.size)
-            {
-               data.caps.size = data.caps.count + GROWBY;
-               data.caps.base = realloc(data.caps.base, 
-                                        sizeof(struct mapcapital) * data.caps.size);
-            }
-
-            cap = &data.caps.base[data.caps.count];
-            data.caps.count ++;
+            cap = mapdata_addcapital(NULL);
 
             cap->money = 0;
             cap->x = tile->x;
@@ -344,15 +360,7 @@ void             mapdata_fullclean(void)
          if(found == 0)
          {
             // Grow the data if nessary
-            if(data.caps.count >= data.caps.size)
-            {
-               data.caps.size = data.caps.count + GROWBY;
-               data.caps.base = realloc(data.caps.base, 
-                                        sizeof(struct mapcapital) * data.caps.size);
-            }
-
-            cap = &data.caps.base[data.caps.count];
-            data.caps.count ++;
+            cap = mapdata_addcapital(NULL);
 
             cap->money = 0;
             cap->x = tile->x;
@@ -438,10 +446,160 @@ int              mapdata_getcanmove(struct maptile * tile)
 void             mapdata_taketile(struct maptile * tile, int new_owner, 
                                   int new_cap_x, int new_cap_y)
 {
+   size_t i, k;
+   struct maptile * ltile;
+   struct mapcapital * cap, * largest_cap;
+   int old_cap_x, old_cap_y;
+   int money;
+
    // 1. Handel the opponent losses
    // 1.a. Check to see if we split the oppent's terratory
 
+   // start by unmarking all terratory
+
+   for(i = 0; i < data.tiles.count; i++)
+   {
+      ltile = &data.tiles.base[i];
+      ltile->flags &= ~FLAGS_SEARCHED;
+   }
+
+   // set the tile to the new owner
+   old_cap_x = tile->cap_x;
+   old_cap_y = tile->cap_y;
+
+   tile->owner = new_owner;
+   tile->cap_x = new_cap_x;
+   tile->cap_y = new_cap_y;
+
+   // Check to see if we have killed a capital
+   if(tile->entity == e_ME_capital)
+   {
+      // If we have, we need to remove the capital
+      mapdata_removecapital(i);
+   }
+      
+   // Search the old owner captial, if we find it, then recalculate
+   // the area.
+   cap = mapdata_getcapital(old_cap_x, old_cap_y);
+   if(cap != NULL)
+   {
+      ltile = mapdata_gettile(cap->x, cap->y);
+      if(ltile != NULL)
+      {
+         cap->size = mapdata_paintcapital(ltile);
+         // Check to see if there is enughf room left to have a capital.
+         if(cap->size < 2)
+         {
+            // TODO: Pick the correct kind of tree.
+            ltile->entity = e_ME_tree;
+            // Find the captial and remove it
+            for(k = 0; k < data.caps.count; k++)
+            {
+               if(cap == &data.caps.base[k])
+               {
+                  mapdata_removecapital(k);
+                  break;
+               }
+            }
+         }
+      }
+   }
+
+   // Now there could be some tiles that have the old captial, but are
+   // not marked as searched. These tiles need to have a new capital
+
+
+   for(i = 0; i < data.tiles.count; i++)
+   {
+      ltile = &data.tiles.base[i];
+      if(ltile->cap_x == old_cap_x && 
+         ltile->cap_y == old_cap_y &&
+         (ltile->flags & FLAGS_SEARCHED) == 0)
+      {
+         int size;
+         ltile->cap_x = ltile->x;
+         ltile->cap_y = ltile->y;
+         size = mapdata_paintcapital(ltile);
+         if(size > 1)
+         {
+            ltile->entity = e_ME_capital;
+            cap = mapdata_addcapital(NULL);
+            cap->x = ltile->x;
+            cap->y = ltile->y;
+            cap->money = 0;
+            cap->size = size;
+         }
+      }
+   }
+
 
    // 2. Handel the gains from the move
+
+   // To start we are going to switch all tiles to point to the capital
+   // that the attacking unit came from. We will also remove all the captial
+   // tiles 
+   ltile = mapdata_gettile(new_cap_x, new_cap_y);
+   cap = mapdata_getcapital(new_cap_x, new_cap_y);
+   if(cap != NULL && ltile != NULL)
+   {
+      // This removes all other captial tiles and sets all connected tiles
+      // to the source capital
+      (void)mapdata_paintcapital(ltile);
+      ltile->entity = e_ME_none;
+
+   }
+   else
+   {
+      fprintf(stderr, "mapdata_taketile: Capital or tile is unexpectedly NULL\n");
+   }
+
+   // Now we will loop though all the captials, Find the tiles that are
+   // pointing to the original captial. Find the one with the most
+   // terratory and set that one
+   money = 0;
+   largest_cap = NULL;
+   for(i = data.caps.count - 1; i < data.caps.count; i--)
+   {
+      cap = &data.caps.base[i];
+      ltile = mapdata_gettile(cap->x, cap->y);
+      if(ltile != NULL && 
+         ltile->cap_x == new_cap_x && 
+         ltile->cap_y == new_cap_y)
+      {
+         struct mapcapital *smaller_cap;
+         money += cap->money;
+         smaller_cap = cap;
+         if(largest_cap == NULL || cap->size > largest_cap->size)
+         {
+            smaller_cap = largest_cap;
+            largest_cap = cap;
+         }
+
+         if(smaller_cap != NULL)
+         {
+            // This is a smaller capital
+            // So we will remove it from the capital list
+            mapdata_removecapital(i);
+         }
+         
+      }
+   }
+   
+   // Reset all the search tiles once more for a final paint
+   for(i = 0; i < data.tiles.count; i++)
+   {
+      ltile = &data.tiles.base[i];
+      ltile->flags &= ~FLAGS_SEARCHED;
+   }
+
+   // We now have the larget_capital. Give it all the money and set the 
+   // entity to a capital and then repaint everything to this capital coordinat
+   largest_cap->money = money;
+   ltile = mapdata_gettile(largest_cap->x, largest_cap->y);
+   if(ltile != NULL)
+   {
+      ltile->entity = e_ME_capital;
+      largest_cap->size = mapdata_paintcapital(ltile);
+   }
 }
 

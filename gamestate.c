@@ -177,7 +177,7 @@ void gamestate_init(void)
 
    mapdata_fullclean();
 
-   mapdata_setmoneyallcapitals(10);
+   mapdata_setmoneyallcapitals(50);
 
 }
 
@@ -600,8 +600,6 @@ static void gamestate_attempttoplace(struct maptile * tile)
       if(canmove_flag == 1)
       {
          mapdata_taketile(tile, grabbed.owner, grabbed.cap_x, grabbed.cap_y);
-         tile->cap_x = grabbed.cap_x;
-         tile->cap_y = grabbed.cap_y;
          tile->entity = grabbed.entity;
          mapdata_setcanmove(tile, 0);
 
