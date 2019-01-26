@@ -300,10 +300,11 @@ static void gamestate_renderui(SDL_Renderer * rend)
       {
          // If we are in the process of buying things then show the accurate balance
          if(grabbed.src_tile != NULL && 
-            grabbed.src_tile->cap_x == cap_x && 
-            grabbed.src_tile->cap_y == cap_y)
+            grabbed.src_tile->entity != grabbed.toplace)
          {
-            money = cap->money - mapdata_getentitycost(grabbed.toplace);
+            money = cap->money - 
+                    (mapdata_getentitycost(grabbed.toplace) -
+                     mapdata_getentitycost(grabbed.src_tile->entity));
          }
          else
          {
