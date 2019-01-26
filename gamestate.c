@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <time.h>
 
+#define DEBUG 0
+
 static struct SDL_Color teamcolors[] =
 {
    {0x66, 0x99, 0x00, 0xFF},
@@ -13,6 +15,23 @@ static struct SDL_Color teamcolors[] =
    {0x99, 0x33, 0x1A, 0xFF}
 };
  
+#define OUTLINE_GROWBY 32
+
+struct outlinepart
+{
+   int x;
+   int y;
+   int srx;
+   int sry;
+};
+
+struct outline
+{
+   struct outlinepart * base;
+   size_t count;
+   size_t size;
+};
+static struct outline outline;
 
 static struct imagedata * imagedata;
 static int hexmouse_x, hexmouse_y;
@@ -177,11 +196,21 @@ void gamestate_init(void)
 
    mapdata_setmoneyallcapitals(50);
 
+
+   // initialize outline
+   outline.size = OUTLINE_GROWBY;
+   outline.count = 0;
+   outline.base = malloc(sizeof(struct outlinepart) * outline.size);
 }
 
 void gamestate_destroy(void)
 {
+   free(outline.base);
+   outline.base = NULL;
+   outline.size = 0;
+   outline.count = 0;
    mapdata_destroy();
+
 }
 
 
@@ -243,6 +272,7 @@ static void drawtext(SDL_Renderer * rend, int x, int y, const char * text)
 }
 
 
+#if DEBUG == 1
 static void gamestate_rendermousedebug(SDL_Renderer * rend)
 {
    SDL_Rect dr;
@@ -255,6 +285,7 @@ static void gamestate_rendermousedebug(SDL_Renderer * rend)
    SDL_RenderCopy(rend, imagedata->hex, NULL, &dr);
    SDL_SetTextureAlphaMod(imagedata->hex, 0xFF);
 }
+#endif // DEBUG == 1
 
 static void gamestate_renderui(SDL_Renderer * rend)
 {
@@ -267,6 +298,7 @@ static void gamestate_renderui(SDL_Renderer * rend)
       cap = mapdata_getcapital(cap_x, cap_y);
       if(cap != NULL)
       {
+         // If we are in the process of buying things then show the accurate balance
          if(grabbed.src_tile != NULL && 
             grabbed.src_tile->cap_x == cap_x && 
             grabbed.src_tile->cap_y == cap_y)
@@ -365,8 +397,22 @@ void gamestate_render(SDL_Renderer * rend)
       SDL_RenderCopy(rend, imagedata->hex, NULL, &dr);
    }
 
+   // Draw Outlines
+
+   for(i = 0; i < outline.count; i++)
+   {
+      struct outlinepart * part;
+      part = &outline.base[i];
+      dr.w = dr.h = 32;
+      sr.w = sr.h = 32;
+      gamestate_hexposition(part->x, part->y, &dr);
+      sr.x = part->srx;
+      sr.y = part->sry;
+
+      SDL_RenderCopy(rend, imagedata->hex_outline, &sr, &dr);
+   }
   
-  // Decorate the tiles 
+   // Decorate the tiles 
    
    for(i = 0; i < mapcount; i++)
    {
@@ -398,7 +444,9 @@ void gamestate_render(SDL_Renderer * rend)
 
 
 
+#if DEBUG == 1
    gamestate_rendermousedebug(rend);
+#endif // DEBUG == 1
 
    // Render Grabbed
 
@@ -416,6 +464,52 @@ void gamestate_render(SDL_Renderer * rend)
    gamestate_renderui(rend);
 
 
+}
+
+static void gamestate_updateoutline(void)
+{
+   outline.count = 0;
+   if(capital_selected == 1)
+   {
+      int i, k, count;
+      struct maptile * tile, * othertile;
+      int sx[6], sy[6];
+      count = mapdata_count();
+      for(i = 0; i < count; i++)
+      {
+         tile = mapdata_getindex(i);
+         if(tile->cap_x == cap_x && tile->cap_y == cap_y)
+         {
+            mapdata_get6suroundingCoordinates(tile->x, tile->y, sx, sy);
+            for(k = 0; k < 6; k++)
+            {
+               othertile = mapdata_gettile(sx[k], sy[k]);
+               if(othertile == NULL || 
+                  othertile->cap_x != cap_x || 
+                  othertile->cap_y != cap_y)
+               {
+                  struct outlinepart * part;
+                  // Add this to the outline
+                  if(outline.count >= outline.size)
+                  {
+                     outline.size = outline.count + OUTLINE_GROWBY;
+                     outline.base = realloc(outline.base, 
+                                           sizeof(struct outlinepart) * 
+                                           outline.size);
+                  }
+
+                  part = &outline.base[outline.count];
+                  outline.count ++;
+
+                  part->x   = tile->x;
+                  part->y   = tile->y;
+                  part->srx = (k % 3) * 32;
+                  part->sry = (k / 3) * 32;
+               }
+            }
+         }
+      }
+   }
 }
 
 static int gamestate_maptilehascaptital(struct maptile * tile)
@@ -461,11 +555,12 @@ static void gamestate_eventleftmouse(int button_state)
                grabbed.src_tile = tile;
                grabbed.toplace = tile->entity;
             }
+            gamestate_updateoutline();
          }
       }
       else
       {
-         // TODO: Add Move Command
+         // Execute move
          struct mapcommandresult result;
          (void)mapdata_moveunit(&result, 
                                 grabbed.src_tile->owner, 
@@ -477,6 +572,12 @@ static void gamestate_eventleftmouse(int button_state)
 
          if(result.type == e_MCRT_success)
          {
+            if(result.mapchanged_flag == 1)
+            {
+               cap_x = grabbed.src_tile->cap_x;
+               cap_y = grabbed.src_tile->cap_y;
+               gamestate_updateoutline();
+            }
             grabbed.src_tile = NULL;
             grabbed.toplace = e_ME_none;
          }
@@ -484,7 +585,6 @@ static void gamestate_eventleftmouse(int button_state)
          {
             printf("Failed to move, Reason: %d\n", result.type);
          }
-
       }
    }
    else if(button_state == SDL_RELEASED)

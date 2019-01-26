@@ -480,6 +480,7 @@ void             mapdata_fullclean(void)
 
    // update the incomes
    mapdata_updateincome();
+   mapdata_updateupkeep();
 }
 
 struct mapcapital * mapdata_getcapital(int x, int y)
@@ -838,6 +839,11 @@ int  mapdata_moveunit(struct mapcommandresult * result, int owner,
    int found;
    struct mapcapital * cap;
    int cost;
+
+   if(result != NULL)
+   {
+      result->mapchanged_flag = 0;
+   }
 
    // Check our entity to see if it is valid
    if(entity != e_ME_castle && 
@@ -1211,6 +1217,7 @@ int  mapdata_moveunit(struct mapcommandresult * result, int owner,
    if(result != NULL)
    {
       result->type = e_MCRT_success;
+      result->mapchanged_flag = 1;
    }
    return 1;
 }

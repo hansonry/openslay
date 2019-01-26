@@ -63,6 +63,7 @@ struct mapcommandresult
    enum mapentity blockedby;
    int blockedby_x;
    int blockedby_y;
+   int mapchanged_flag;
 };
 
 void mapdata_init(void);
