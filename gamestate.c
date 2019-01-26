@@ -22,11 +22,9 @@ struct grabbed
 {
 // This will be used to determine what unit is grabbed by the mouse
 // only valid values will be e_ME_none e_ME_peasant e_ME_spearman
-// e_ME_knight e_ME_baron
-   enum mapentity entity;
-   int cap_x;
-   int cap_y;
-   int owner;
+// e_ME_knight e_ME_baron e_ME_castle
+   enum mapentity toplace;
+   struct maptile * src_tile;
 };
 
 static struct grabbed grabbed;
@@ -191,7 +189,8 @@ void gamestate_onenter(void)
 {
    gamestate_updatehexmouse();
    capital_selected = 0;
-   grabbed.entity = e_ME_none;
+   grabbed.toplace = e_ME_none;
+   grabbed.src_tile = NULL;
 }
 
 void gamestate_onexit(void)
@@ -261,13 +260,24 @@ static void gamestate_renderui(SDL_Renderer * rend)
 {
    char text[128];
    struct mapcapital * cap;
+   int money;
 
    if(capital_selected)
    {
       cap = mapdata_getcapital(cap_x, cap_y);
       if(cap != NULL)
       {
-         sprintf(text, "Money: %d", cap->money);
+         if(grabbed.src_tile != NULL && 
+            grabbed.src_tile->cap_x == cap_x && 
+            grabbed.src_tile->cap_y == cap_y)
+         {
+            money = cap->money - mapdata_getentitycost(grabbed.toplace);
+         }
+         else
+         {
+            money = cap->money;
+         }
+         sprintf(text, "Money: %d", money);
          drawtext(rend, 400, 20, text);
          sprintf(text, "Size: %d", cap->size);
          drawtext(rend, 400, 48, text);
@@ -363,12 +373,20 @@ void gamestate_render(SDL_Renderer * rend)
       
       tile = mapdata_getindex(i);
 
-      dr.w = dr.h = 32;
+      if(grabbed.toplace != e_ME_none && 
+         tile->entity != e_ME_capital &&
+         tile == grabbed.src_tile)
+      {
+         text = NULL;
+      }
+      else
+      {
+         dr.w = dr.h = 32;
 
-      gamestate_hexposition(tile->x, tile->y, &dr);
-
-
-      text = gamestate_getUnitTexture(tile->entity, &sr);
+         gamestate_hexposition(tile->x, tile->y, &dr);
+         
+         text = gamestate_getUnitTexture(tile->entity, &sr);
+      }
       if(text != NULL)
       {
          SDL_RenderCopy(rend, text, &sr, &dr);
@@ -384,9 +402,9 @@ void gamestate_render(SDL_Renderer * rend)
 
    // Render Grabbed
 
-   if(grabbed.entity != e_ME_none)
+   if(grabbed.toplace != e_ME_none)
    {
-      text = gamestate_getUnitTexture(grabbed.entity, &sr);
+      text = gamestate_getUnitTexture(grabbed.toplace, &sr);
       if(text != NULL)
       {
          SDL_GetMouseState(&dr.x, &dr.y);
@@ -421,210 +439,13 @@ static int gamestate_maptilehascaptital(struct maptile * tile)
    }
 }
 
-static int gamestate_wincheck(enum mapentity attacker, 
-                              enum mapentity defender)
-{
-   int win;
-   if(attacker == e_ME_baron)
-   {
-      switch(defender)
-      {
-      default:
-         win = 1;
-         break;
-      case e_ME_baron:
-         win = 0;
-         break;
-      }
-   }
-   else if(attacker == e_ME_knight)
-   {
-      switch(defender)
-      {
-      default:
-         win = 1;
-         break;
-      case e_ME_baron:
-      case e_ME_knight:
-         win = 0;
-         break;
-      }
-   }
-   else if(attacker == e_ME_spearman)
-   {
-      switch(defender)
-      {
-      default:
-         win = 1;
-         break;
-      case e_ME_baron:
-      case e_ME_knight:
-      case e_ME_spearman:
-      case e_ME_castle:
-         win = 0;
-         break;
-      }
-   }
-   else if(attacker == e_ME_peasant)
-   {
-      switch(defender)
-      {
-      default:
-         win = 1;
-         break;
-      case e_ME_baron:
-      case e_ME_knight:
-      case e_ME_spearman:
-      case e_ME_castle:
-      case e_ME_peasant:
-      case e_ME_capital:
-         win = 0;
-         break;
-      }
-   }
-   else
-   {
-      win = 0;
-   }
-   return win;
-}
-
-static enum mapentity gamestate_sumunit(enum mapentity e1, enum mapentity e2)
-{
-   enum mapentity result;
-   enum mapentity e[2];
-   int v[2];
-   int vr;
-   int i;
-   
-   e[0] = e1;
-   e[1] = e2;
-   for(i = 0; i < 2; i++)
-   {
-      switch(e[i])
-      {
-      default:            v[i] = 0; break;
-      case e_ME_peasant:  v[i] = 1; break; 
-      case e_ME_spearman: v[i] = 2; break; 
-      case e_ME_knight:   v[i] = 3; break; 
-      case e_ME_baron:    v[i] = 4; break; 
-      }
-   }
-
-   vr = v[0] + v[1];
-
-   switch(vr)
-   {
-   case 0:  result = e_ME_none;     break;
-   case 1:  result = e_ME_peasant;  break;
-   case 2:  result = e_ME_spearman; break;
-   case 3:  result = e_ME_knight;   break;
-   case 4:  result = e_ME_baron;    break;
-   default: result = e_ME_grave;    break;
-   }
-
-   return result;
-}
-
-static void gamestate_attempttoplace(struct maptile * tile)
-{
-   int sx[6];
-   int sy[6];
-   int i;
-   int win;
-   int canmove_flag;
-   struct maptile * ntile;
-   enum mapentity entity;
-
-   if(tile->cap_x == grabbed.cap_x && 
-      tile->cap_y == grabbed.cap_y)
-   {
-      switch(tile->entity)
-      {
-      case e_ME_none:
-         mapdata_setcanmove(tile, 1);
-         tile->entity = grabbed.entity;
-         grabbed.entity = e_ME_none;
-         break;
-      case e_ME_tree:
-      case e_ME_palmtree:
-      case e_ME_grave:
-         mapdata_setcanmove(tile, 0);
-         tile->entity = grabbed.entity;
-         grabbed.entity = e_ME_none;
-         break;
-      case e_ME_peasant:
-      case e_ME_spearman:
-      case e_ME_knight:
-      case e_ME_baron:
-         
-         entity = gamestate_sumunit(tile->entity, grabbed.entity);
-         if(entity != e_ME_grave && entity != e_ME_none)
-         {
-            tile->entity = entity;
-            grabbed.entity = e_ME_none;
-         }
-         break;
-      default:
-         // Do Nothing on purpose
-         // Not a valid spot to drop a unit
-         break;
-      }
-   }
-   else
-   {
-      mapdata_get6suroundingCoordinates(tile->x, tile->y, sx, sy);
-
-      // Check to see if the move is possible
-      win = gamestate_wincheck(grabbed.entity, tile->entity);
-      if(win == 1)
-      {
-         canmove_flag = 1;
-         for(i = 0; i < 6; i++)
-         {
-            ntile = mapdata_gettile(sx[i], sy[i]);
-            if(ntile == NULL)
-            {
-               continue;
-            }
-            win = gamestate_wincheck(grabbed.entity, ntile->entity);
-            if(win == 0 && ntile->owner == tile->owner)
-            {
-               canmove_flag = 0;
-               break;
-            }
-            
-         }
-      }
-      else
-      {
-         canmove_flag = 0;
-      }
-
-      if(canmove_flag == 1)
-      {
-         mapdata_taketile(tile, grabbed.owner, grabbed.cap_x, grabbed.cap_y);
-         tile->entity = grabbed.entity;
-         mapdata_setcanmove(tile, 0);
-
-         grabbed.entity = e_ME_none;
-
-         // Use check the tile for the new owner
-         cap_x = tile->cap_x;
-         cap_y = tile->cap_y;
-
-      }
-   }
-   mapdata_updateupkeep();
-}
-
 static void gamestate_eventleftmouse(int button_state)
 {
    struct maptile * tile;
    if(button_state == SDL_PRESSED)
    {
       tile = mapdata_gettile(hexmouse_x, hexmouse_y);
-      if(grabbed.entity == e_ME_none)
+      if(grabbed.toplace == e_ME_none)
       {
          if(tile != NULL && gamestate_maptilehascaptital(tile))
          {
@@ -637,21 +458,33 @@ static void gamestate_eventleftmouse(int button_state)
                 tile->entity == e_ME_baron) &&
                 mapdata_getcanmove(tile) == 1)
             {
-               grabbed.entity = tile->entity;
-               grabbed.owner = tile->owner;
-               grabbed.cap_x = tile->cap_x;
-               grabbed.cap_y = tile->cap_y;
-
-               tile->entity = e_ME_none;
+               grabbed.src_tile = tile;
+               grabbed.toplace = tile->entity;
             }
          }
       }
       else
       {
-         if(tile != NULL)
+         // TODO: Add Move Command
+         struct mapcommandresult result;
+         (void)mapdata_moveunit(&result, 
+                                grabbed.src_tile->owner, 
+                                grabbed.src_tile->x, 
+                                grabbed.src_tile->y,
+                                hexmouse_x,
+                                hexmouse_y,
+                                grabbed.toplace);
+
+         if(result.type == e_MCRT_success)
          {
-            gamestate_attempttoplace(tile);
+            grabbed.src_tile = NULL;
+            grabbed.toplace = e_ME_none;
          }
+         else
+         {
+            printf("Failed to move, Reason: %d\n", result.type);
+         }
+
       }
    }
    else if(button_state == SDL_RELEASED)
@@ -665,20 +498,36 @@ static void gamestate_eventrightmouse(int button_state)
    struct maptile * tile;
    if(button_state == SDL_PRESSED)
    {
-      if(capital_selected == 1)
+      if(capital_selected == 1 && grabbed.toplace == e_ME_none)
       {
          cap = mapdata_getcapital(cap_x, cap_y);
          tile = mapdata_gettile(cap_x, cap_y);
-         if(cap != NULL && cap->money >= 10)
+         if(cap != NULL && tile != NULL && cap->money >= 10)
          {
-            cap->money -= 10;
-            grabbed.entity = e_ME_peasant;
-            grabbed.cap_x = cap_x;
-            grabbed.cap_y = cap_y;
-            if(tile != NULL)
-            {
-               grabbed.owner = tile->owner;
-            }
+            grabbed.toplace = e_ME_peasant;
+            grabbed.src_tile = tile;
+         }
+      }
+      else if(grabbed.toplace == e_ME_peasant ||
+              grabbed.toplace == e_ME_spearman ||
+              grabbed.toplace == e_ME_knight)
+      {
+         enum mapentity upgrade;
+         cap = mapdata_getcapital(grabbed.src_tile->cap_x, 
+                                  grabbed.src_tile->cap_y);
+
+         switch(grabbed.toplace)
+         {
+         case e_ME_peasant:  upgrade = e_ME_spearman; break;
+         case e_ME_spearman: upgrade = e_ME_knight;   break;
+         case e_ME_knight:   upgrade = e_ME_baron;    break;
+         default: 
+            // Do nothing, this shouldn't happen
+            break;
+         }
+         if(cap->money >= mapdata_getentitycost(upgrade))
+         {
+            grabbed.toplace = upgrade;
          }
       }
    }

@@ -36,6 +36,35 @@ struct mapcapital
    int size;
 };
 
+enum mapcommandresulttype
+{
+   e_MCRT_success, // Everything was good
+   e_MCRT_notreachable, // You attempted to place a unit on a spot it can't get to
+   e_MCRT_notacapital, // The capital you provided is actualy not a capital
+   e_MCRT_notenoughmoney, // Not enugh money to do that thing
+   e_MCRT_blocked, // Your command is prevent because a stronger unit is blocking it
+   e_MCRT_notyourunit, // You attempted to command a unit that is not yours
+   e_MCRT_sourcenottile, // You attempt to command something that is not even a tile
+   e_MCRT_notvalidentity, // You attempted to command blades of grass (something that is not a unit)
+   e_MCRT_sourcenotvalidunit, // Your source is not a valid unit
+   e_MCRT_destnottile, // You attempt to move something onto a non-existant tile
+   e_MCRT_destblockedbybuilding, // You attempted to move your unit onto a capital or castle
+   e_MCRT_sourceunitcantmove, // The unit you attempted to move has alread moved this turn
+   e_MCRT_combinedunitabovemax, // The resulting unit would be above barron.
+   e_MCRT_notabuyableunit, // You attempted to buy something that doesn't make sence like a tree
+   e_MCRT_cantupgradetocastle, // You tried to upgrade a unit to a castle
+   e_MCRT_cantcastleattack, // You attempted to place a casle outside you terratory
+   e_MCRT_error // A logical error has occured, this should never happen.
+};
+
+struct mapcommandresult
+{
+   enum mapcommandresulttype type;
+   enum mapentity blockedby;
+   int blockedby_x;
+   int blockedby_y;
+};
+
 void mapdata_init(void);
 void mapdata_destroy(void);
 
@@ -52,18 +81,20 @@ void             mapdata_fullclean(void);
 struct mapcapital * mapdata_getcapital(int x, int y);
 
 void             mapdata_setmoneyallcapitals(int amount);
+int              mapdata_getentitycost(enum mapentity entity);
 
 
-void             mapdata_setcanmove(struct maptile * tile, int flag);
 int              mapdata_getcanmove(struct maptile * tile);
 
 void             mapdata_get6suroundingCoordinates(int x, int y, 
                                                    int * xs_out, int * ys_out);
 
-void             mapdata_taketile(struct maptile * tile, int new_owner, 
-                                  int new_cap_x, int new_cap_y);
 
-void             mapdata_updateupkeep(void);
+
+int  mapdata_moveunit(struct mapcommandresult * result, int owner, 
+                      int from_x, int from_y, int to_x, int to_y,
+                      enum mapentity entity);
+
 
 #endif // __MAPDATA_H__
 

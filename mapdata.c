@@ -168,7 +168,7 @@ void             mapdata_get6suroundingCoordinates(int x, int y,
 
 }
 
-void mapdata_updateupkeep(void)
+static void mapdata_updateupkeep(void)
 {
    size_t i, k;
    struct mapcapital * cap;
@@ -510,17 +510,6 @@ void             mapdata_setmoneyallcapitals(int amount)
    }
 }
 
-void             mapdata_setcanmove(struct maptile * tile, int flag)
-{
-   if(flag)
-   {
-      tile->flags |= FLAGS_CANMOVE;
-   }
-   else
-   {
-      tile->flags &= ~FLAGS_CANMOVE;
-   }
-}
 
 int              mapdata_getcanmove(struct maptile * tile)
 {
@@ -534,7 +523,22 @@ int              mapdata_getcanmove(struct maptile * tile)
    }
 }
 
-void             mapdata_taketile(struct maptile * tile, int new_owner, 
+int              mapdata_getentitycost(enum mapentity entity)
+{
+   int cost;
+   switch(entity)
+   {
+   case e_ME_peasant:  cost = 10; break;
+   case e_ME_spearman: cost = 20; break;
+   case e_ME_knight:   cost = 30; break;
+   case e_ME_baron:    cost = 40; break;
+   case e_ME_castle:   cost = 25; break;
+   default:            cost = 0;  break;
+   }
+   return cost;
+}
+
+static void      mapdata_taketile(struct maptile * tile, int new_owner, 
                                   int new_cap_x, int new_cap_y)
 {
    size_t i, k;
@@ -714,4 +718,502 @@ void             mapdata_taketile(struct maptile * tile, int new_owner,
 
    mapdata_updateincome();
 }
+
+static int mapdata_wincheck(enum mapentity attacker, 
+                            enum mapentity defender)
+{
+   int win;
+   if(attacker == e_ME_baron)
+   {
+      switch(defender)
+      {
+      default:
+         win = 1;
+         break;
+      case e_ME_baron:
+         win = 0;
+         break;
+      }
+   }
+   else if(attacker == e_ME_knight)
+   {
+      switch(defender)
+      {
+      default:
+         win = 1;
+         break;
+      case e_ME_baron:
+      case e_ME_knight:
+         win = 0;
+         break;
+      }
+   }
+   else if(attacker == e_ME_spearman)
+   {
+      switch(defender)
+      {
+      default:
+         win = 1;
+         break;
+      case e_ME_baron:
+      case e_ME_knight:
+      case e_ME_spearman:
+      case e_ME_castle:
+         win = 0;
+         break;
+      }
+   }
+   else if(attacker == e_ME_peasant)
+   {
+      switch(defender)
+      {
+      default:
+         win = 1;
+         break;
+      case e_ME_baron:
+      case e_ME_knight:
+      case e_ME_spearman:
+      case e_ME_castle:
+      case e_ME_peasant:
+      case e_ME_capital:
+         win = 0;
+         break;
+      }
+   }
+   else
+   {
+      win = 0;
+   }
+   return win;
+}
+
+static enum mapentity mapdata_sumunit(enum mapentity e1, enum mapentity e2)
+{
+   enum mapentity result;
+   enum mapentity e[2];
+   int v[2];
+   int vr;
+   int i;
+   
+   e[0] = e1;
+   e[1] = e2;
+   for(i = 0; i < 2; i++)
+   {
+      switch(e[i])
+      {
+      default:            v[i] = 0; break;
+      case e_ME_peasant:  v[i] = 1; break; 
+      case e_ME_spearman: v[i] = 2; break; 
+      case e_ME_knight:   v[i] = 3; break; 
+      case e_ME_baron:    v[i] = 4; break; 
+      }
+   }
+
+   vr = v[0] + v[1];
+
+   switch(vr)
+   {
+   case 0:  result = e_ME_none;     break;
+   case 1:  result = e_ME_peasant;  break;
+   case 2:  result = e_ME_spearman; break;
+   case 3:  result = e_ME_knight;   break;
+   case 4:  result = e_ME_baron;    break;
+   default: result = e_ME_grave;    break;
+   }
+
+   return result;
+}
+
+// Buying the unit set the to_x and to_y to the capital
+int  mapdata_moveunit(struct mapcommandresult * result, int owner, 
+                      int from_x, int from_y, int to_x, int to_y,
+                      enum mapentity entity)
+{
+   struct maptile * src_tile;
+   struct maptile * dest_tile;
+   enum mapentity lentity;
+   int sx[6], sy[6];
+   struct maptile * stile[6];
+   int i;
+   int found;
+   struct mapcapital * cap;
+   int cost;
+
+   // Check our entity to see if it is valid
+   if(entity != e_ME_castle && 
+      entity != e_ME_peasant &&
+      entity != e_ME_spearman &&
+      entity != e_ME_knight &&
+      entity != e_ME_baron)
+   {
+      if(result != NULL)
+      {
+         result->type = e_MCRT_notvalidentity;
+      }
+
+      return 0;
+   }
+
+   // Check our source tile to see if it exists
+   src_tile = mapdata_gettile(from_x, from_y);
+   if(src_tile == NULL)
+   {
+      if(result != NULL)
+      {
+         result->type = e_MCRT_sourcenottile;
+      }
+      return 0;
+   }
+
+   // Check our source entity to see if it is valid
+   if(src_tile->entity != e_ME_capital && // used to create units 
+      src_tile->entity != e_ME_peasant &&
+      src_tile->entity != e_ME_spearman &&
+      src_tile->entity != e_ME_knight &&
+      src_tile->entity != e_ME_baron)
+   {
+      if(result != NULL)
+      {
+         result->type = e_MCRT_sourcenotvalidunit;
+      }
+
+      return 0;
+   }
+
+
+   // Check to see if you own the unit
+   if(src_tile->owner != owner)
+   {
+      if(result != NULL)
+      {
+         result->type = e_MCRT_notyourunit;
+      }
+
+      return 0;
+   }
+
+   // Check to see if the source unit has move capablities
+   if(src_tile->entity != e_ME_capital && // New units can move
+      (src_tile->flags & FLAGS_CANMOVE) != FLAGS_CANMOVE)
+   {
+      
+      if(result != NULL)
+      {
+         result->type = e_MCRT_sourceunitcantmove;
+      }
+      return 0;
+   }
+
+   // Are we just moving a unit or upgrading it too?
+   if(src_tile->entity != entity)
+   {
+
+      // We are upgrading or buying the unit. Compute the cost
+
+      cost = mapdata_getentitycost(entity) -
+             mapdata_getentitycost(src_tile->entity);
+
+      // Check to see if we have the money and a capital
+      cap = mapdata_getcapital(src_tile->cap_x, src_tile->cap_y);
+      if(cap == NULL)
+      {
+         if(result != NULL)
+         {
+            result->type = e_MCRT_notacapital;
+         }
+         return 0;
+      }
+
+
+      if(cap->money < cost)
+      {
+         if(result != NULL)
+         {
+            result->type = e_MCRT_notenoughmoney;
+         }
+         return 0;
+      }
+   }
+   else
+   {
+      cap = NULL;
+      cost = 0;
+   }
+
+   // Check the destination tile
+   dest_tile = mapdata_gettile(to_x, to_y);
+   if(dest_tile == NULL)
+   {
+      if(result != NULL)
+      {
+         result->type = e_MCRT_destnottile;
+      }
+      return 0;
+   }
+
+   // Castle specific stuff
+   if(entity == e_ME_castle)
+   {
+      // You can only buy castles, not upgrade to them
+      if(src_tile->entity != e_ME_capital)
+      {
+         if(result != NULL)
+         {
+            result->type = e_MCRT_cantupgradetocastle;
+         }
+         return 0;
+      }
+
+      // Check to see if we are placing castles in our own territory
+      if(src_tile->cap_x != dest_tile->cap_x ||
+         src_tile->cap_y != dest_tile->cap_y)
+      {
+         if(result != NULL)
+         {
+            result->type = e_MCRT_cantcastleattack;
+         }
+         return 0;
+      }
+
+      // We can only place castls on empty tiles
+      if(dest_tile->entity != e_ME_none)
+      {
+         if(result != NULL)
+         {
+            result->type = e_MCRT_blocked;
+            result->blockedby = dest_tile->entity;
+            result->blockedby_x = to_x;
+            result->blockedby_y = to_y;
+         }
+         return 0;
+      }
+
+      // Ok we can place the castle now
+      dest_tile->entity = entity;
+      cap->money -= cost;
+      if(result != NULL)
+      {
+         result->type = e_MCRT_success;
+      }
+      return 1;
+
+   }
+
+   // Check to see if we are placing the unit right back down
+   if(src_tile == dest_tile)
+   {
+      dest_tile->entity = entity;
+      if(cap != NULL)
+      {
+         cap->money -= cost;
+      }
+
+      mapdata_updateupkeep();
+      if(result != NULL)
+      {
+         result->type = e_MCRT_success;
+      }
+      return 1;
+   }
+
+   // Check to see if we are moving within our terratory 
+   if(src_tile->cap_x == dest_tile->cap_x &&
+      src_tile->cap_y == dest_tile->cap_y)
+   {
+         
+      switch(dest_tile->entity)
+      {
+      case e_ME_none:
+         // Nothing here, just move the unit and mark it as good to move again
+         dest_tile->flags |= FLAGS_CANMOVE;
+         if(src_tile->entity != e_ME_capital)
+         {
+            src_tile->entity = e_ME_none;
+         }
+         dest_tile->entity = entity;
+         if(cap != NULL)
+         {
+            cap->money -= cost;
+         }
+
+         mapdata_updateupkeep();
+         if(result != NULL)
+         {
+            result->type = e_MCRT_success;
+         }
+         return 1;
+         break;
+      case e_ME_tree:
+      case e_ME_palmtree:
+      case e_ME_grave:
+         // Cleanup the blockers and mark the unit as moved
+         dest_tile->flags &= ~FLAGS_CANMOVE;
+         if(src_tile->entity != e_ME_capital)
+         {
+            src_tile->entity = e_ME_none;
+         }
+         dest_tile->entity = entity;
+         if(cap != NULL)
+         {
+            cap->money -= cost;
+         }
+         mapdata_updateupkeep();
+         if(result != NULL)
+         {
+            result->type = e_MCRT_success;
+         }
+         return 1;
+         break;
+      case e_ME_peasant:
+      case e_ME_spearman:
+      case e_ME_knight:
+      case e_ME_baron:
+         // Combine the two units. Use the movement state of
+         // the destination unit.
+         lentity = mapdata_sumunit(entity, dest_tile->entity);
+         if(lentity == e_ME_grave) // Grave indicates larger than barron
+         {
+            if(result != NULL)
+            {
+               result->type = e_MCRT_combinedunitabovemax;
+            }
+            return 0;
+         }
+         else if(lentity == e_ME_none)
+         {
+            fprintf(stderr, "mapdata_moveunit: The sum of two units shouldn't be nothing\n");
+            if(result != NULL)
+            {
+               result->type = e_MCRT_error;
+            }
+            return 0;
+         }
+         else
+         {
+            if(src_tile->entity != e_ME_capital)
+            {
+               src_tile->entity = e_ME_none;
+            }
+            dest_tile->entity = lentity;
+
+            mapdata_updateupkeep();
+            if(cap != NULL)
+            {
+               cap->money -= cost;
+            }
+
+            if(result != NULL)
+            {
+               result->type = e_MCRT_success;
+            }
+            return 1;
+         }
+         break;
+      default:
+         if(result != NULL)
+         {
+            result->type = e_MCRT_destblockedbybuilding;
+         }
+         return 0;
+         break;
+      }
+   }
+
+   // We are not moving onto our terrain if we get here
+
+   // Gather information about the surrounding tiles
+   mapdata_get6suroundingCoordinates(to_x, to_y, sx, sy);
+   for(i = 0; i < 6; i++)
+   {
+      stile[i] = mapdata_gettile(sx[i], sy[i]);
+   }
+
+   // Check to see if we are one away from our attacking terratory
+   found = 0;
+   for(i = 0; i < 6; i++)
+   {
+      if(stile[i] != NULL &&
+         stile[i]->cap_x == src_tile->cap_x &&
+         stile[i]->cap_y == src_tile->cap_y)
+      {
+         found = 1;
+         break;
+      }
+   }
+
+   if(found == 0)
+   {
+      if(result != NULL)
+      {
+         result->type = e_MCRT_notreachable;
+      }
+      return 0;
+   }
+
+   // Can we win a fight with what is in the destination tile
+   if(!mapdata_wincheck(entity, dest_tile->entity))
+   {
+      if(result != NULL)
+      {
+         result->type = e_MCRT_blocked;
+         result->blockedby = dest_tile->entity;
+         result->blockedby_x = dest_tile->x;
+         result->blockedby_x = dest_tile->y;
+      }
+      return 0;
+   }
+
+   // Ok we can win that fight, but can we win against anything else near by
+   // (Withing their own terratory)
+   
+   for(i = 0; i < 6; i++)
+   {
+      if(stile[i] != NULL &&
+         dest_tile->cap_x == stile[i]->cap_x && // Check to see if this is the same cap as
+         dest_tile->cap_y == stile[i]->cap_y && // the defending tile
+         !mapdata_wincheck(entity, stile[i]->entity)) // See if we lose 
+      {
+         // So we lost a fight with something one away from the defending tile
+         // that is the same capital. So we can make this move
+         if(result != NULL)
+         {
+            result->type = e_MCRT_blocked;
+            result->blockedby = stile[i]->entity;
+            result->blockedby_x = sx[i];
+            result->blockedby_x = sy[i];
+         }
+         return 0;
+      }
+   }
+
+   // At this point there is nothing stopping the attacker from taking this
+   // spot. So take it.
+
+   mapdata_taketile(dest_tile, src_tile->owner, 
+                    src_tile->cap_x, src_tile->cap_y);
+
+   dest_tile->entity = entity;
+   dest_tile->flags &= ~FLAGS_CANMOVE;
+   
+
+   if(cap != NULL)
+   {
+      cap->money -= cost;
+   }
+
+   if(src_tile->entity != e_ME_capital)
+   {
+      src_tile->entity = e_ME_none;
+   }
+   
+   mapdata_updateupkeep();
+
+   if(result != NULL)
+   {
+      result->type = e_MCRT_success;
+   }
+   return 1;
+}
+
+
 
