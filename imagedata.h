@@ -8,7 +8,9 @@ struct imagedata
    SDL_Texture * unit;
    SDL_Texture * capital;
    SDL_Texture * castle;
+   SDL_Texture * grave;
    SDL_Texture * trees;
+   SDL_Texture * hex_outline;
    SDL_Texture * bitmapfont;
 };
 

@@ -26,12 +26,14 @@ static SDL_Texture * imagedata_loadimage(SDL_Renderer * rend,
 
 void imagedata_load(SDL_Renderer * rend)
 {
-   imagedata.hex        = imagedata_loadimage(rend, "assets/images/32x32Hex.png");
-   imagedata.unit       = imagedata_loadimage(rend, "assets/images/Unit.png");
-   imagedata.capital    = imagedata_loadimage(rend, "assets/images/Capital.png");
-   imagedata.castle     = imagedata_loadimage(rend, "assets/images/Castle.png");
-   imagedata.trees      = imagedata_loadimage(rend, "assets/images/trees.png");
-   imagedata.bitmapfont = imagedata_loadimage(rend, "assets/images/bitmapfont.png");
+   imagedata.hex         = imagedata_loadimage(rend, "assets/images/32x32Hex.png");
+   imagedata.unit        = imagedata_loadimage(rend, "assets/images/Unit.png");
+   imagedata.capital     = imagedata_loadimage(rend, "assets/images/Capital.png");
+   imagedata.castle      = imagedata_loadimage(rend, "assets/images/Castle.png");
+   imagedata.trees       = imagedata_loadimage(rend, "assets/images/trees.png");
+   imagedata.grave       = imagedata_loadimage(rend, "assets/images/grave.png");
+   imagedata.hex_outline = imagedata_loadimage(rend, "assets/images/32x32HexOutline.png");
+   imagedata.bitmapfont  = imagedata_loadimage(rend, "assets/images/bitmapfont.png");
 
 
    imagedataloaded = 1;
@@ -45,6 +47,9 @@ void imagedata_free(void)
    SDL_DestroyTexture(imagedata.unit);
    SDL_DestroyTexture(imagedata.capital);
    SDL_DestroyTexture(imagedata.castle);
+   SDL_DestroyTexture(imagedata.trees);
+   SDL_DestroyTexture(imagedata.grave);
+   SDL_DestroyTexture(imagedata.hex_outline);
    SDL_DestroyTexture(imagedata.bitmapfont);
 }
 
