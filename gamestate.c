@@ -42,10 +42,12 @@ struct selectedcapital
 
 static struct selectedcapital selcap;
 
+
 static struct imagedata * imagedata;
 static int hexmouse_x, hexmouse_y;
 
 static struct gamestatesetting settings;
+static int currentowner;
 
 struct grabbed
 {
@@ -254,6 +256,8 @@ void gamestate_onenter(struct gamestatesetting * _settings)
    selcap.isselected = 0;
    grabbed.toplace = e_ME_none;
    grabbed.src_tile = NULL;
+
+   currentowner = 0;
 }
 
 void gamestate_onexit(void)
@@ -326,6 +330,20 @@ static void gamestate_renderui(SDL_Renderer * rend)
    char text[128];
    struct mapcapital * cap;
    int money;
+   int y;
+   SDL_Rect dr;
+
+   y = 32;
+   SDL_SetTextureColorMod(imagedata->hex, 
+                          teamcolors[currentowner].r,
+                          teamcolors[currentowner].g,
+                          teamcolors[currentowner].b);
+   dr.h = dr.w = 32;
+   dr.x = 400;
+   dr.y = y;
+   SDL_RenderCopy(rend, imagedata->hex, NULL, &dr);
+
+   y += 64;
 
    if(selcap.isselected == 1)
    {
@@ -344,14 +362,19 @@ static void gamestate_renderui(SDL_Renderer * rend)
          {
             money = cap->money;
          }
+
+         
          sprintf(text, "Money: %d", money);
-         drawtext(rend, 400, 20, text);
+         drawtext(rend, 400, y, text);
+         y += 28;
          sprintf(text, "Size: %d", cap->size);
-         drawtext(rend, 400, 48, text);
+         drawtext(rend, 400, y, text);
+         y += 28;
          sprintf(text, "Income: %d", cap->income);
-         drawtext(rend, 400, 76, text);
+         drawtext(rend, 400, y, text);
+         y += 28;
          sprintf(text, "Upkeep: %d", -cap->upkeep);
-         drawtext(rend, 400, 104, text);
+         drawtext(rend, 400, y, text);
       }
    }
 }
@@ -478,11 +501,12 @@ void gamestate_render(SDL_Renderer * rend)
    }
 
 
-   drawtext(rend, 400, 150, "Hi MOM! 0123456789");
 
 
 
 #if DEBUG == 1
+   drawtext(rend, 400, 150, "Hi MOM! 0123456789");
+
    gamestate_rendermousedebug(rend);
 #endif // DEBUG == 1
 
@@ -579,7 +603,10 @@ static void gamestate_eventleftmouse(int button_state)
       tile = mapdata_gettile(hexmouse_x, hexmouse_y);
       if(grabbed.toplace == e_ME_none)
       {
-         if(tile != NULL && gamestate_maptilehascaptital(tile))
+         if(tile != NULL && 
+            (tile->owner == currentowner ||
+             currentowner == -1) && 
+            gamestate_maptilehascaptital(tile))
          {
             selcap.isselected = 1;
             selcap.x = tile->cap_x;
@@ -588,7 +615,9 @@ static void gamestate_eventleftmouse(int button_state)
                 tile->entity == e_ME_spearman ||
                 tile->entity == e_ME_knight ||
                 tile->entity == e_ME_baron) &&
-                mapdata_getcanmove(tile) == 1)
+               (tile->owner == currentowner ||
+                currentowner == -1) &&
+               mapdata_getcanmove(tile) == 1)
             {
                grabbed.src_tile = tile;
                grabbed.toplace = tile->entity;
@@ -694,6 +723,7 @@ void gamestate_event(SDL_Event * event)
    else if(event->type == SDL_KEYDOWN)
    {
       int owner;
+      owner = -1;
       if(event->key.keysym.sym == SDLK_1)
       {
          owner = 0;
@@ -714,8 +744,23 @@ void gamestate_event(SDL_Event * event)
       {
          owner = 4;
       }
-
-      mapdata_startturn(owner);
+      else if(event->key.keysym.sym == SDLK_SPACE)
+      {
+         currentowner ++;
+         if(currentowner >= settings.playercount)
+         {
+            currentowner = 0;
+         }
+         owner = currentowner;
+         selcap.isselected = 0;
+         gamestate_updateoutline();
+      }
+     
+      
+      if(owner != -1)
+      {
+         mapdata_startturn(owner);
+      }
 
    }
 }
