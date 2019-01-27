@@ -37,6 +37,8 @@ static struct imagedata * imagedata;
 static int hexmouse_x, hexmouse_y;
 static int capital_selected, cap_x, cap_y;
 
+static struct gamestatesetting settings;
+
 struct grabbed
 {
 // This will be used to determine what unit is grabbed by the mouse
@@ -147,18 +149,45 @@ static void gamestate_randomizemap(void)
    {   
       tile = mapdata_getindex(i);
       r = rand();
-      tile->owner = (r % 5);
+      tile->owner = (r % settings.playercount);
    }
 
 }
 
 void gamestate_init(void)
 {
-   int x, y;
    imagedata = imagedata_get();
 
    mapdata_init();
 
+
+   settings.playertypes = NULL;
+
+   // initialize outline
+   outline.size = OUTLINE_GROWBY;
+   outline.count = 0;
+   outline.base = malloc(sizeof(struct outlinepart) * outline.size);
+}
+
+void gamestate_destroy(void)
+{
+   if(settings.playertypes != NULL)
+   {
+      free(settings.playertypes);
+      settings.playertypes = NULL;
+   }
+   free(outline.base);
+   outline.base = NULL;
+   outline.size = 0;
+   outline.count = 0;
+   mapdata_destroy();
+
+}
+
+static void gamestate_generatemap(void)
+{
+   int x, y;
+   mapdata_clear();
    /*
    mapdata_addtile(0, 0)->owner = 0;
    mapdata_addtile(1, 0)->owner = 1;
@@ -195,27 +224,23 @@ void gamestate_init(void)
    mapdata_fullclean();
 
    mapdata_setmoneyallcapitals(50);
-
-
-   // initialize outline
-   outline.size = OUTLINE_GROWBY;
-   outline.count = 0;
-   outline.base = malloc(sizeof(struct outlinepart) * outline.size);
 }
 
-void gamestate_destroy(void)
+void gamestate_onenter(struct gamestatesetting * _settings)
 {
-   free(outline.base);
-   outline.base = NULL;
-   outline.size = 0;
-   outline.count = 0;
-   mapdata_destroy();
+   size_t size;
 
-}
+   if(settings.playertypes != NULL)
+   {
+      free(settings.playertypes);
+   }
+   memcpy(&settings, _settings, sizeof(struct gamestatesetting));
 
+   size = sizeof(enum gamestateplayertype) * settings.playercount;
+   settings.playertypes = malloc(size);
+   memcpy(settings.playertypes, _settings->playertypes, size);
 
-void gamestate_onenter(void)
-{
+   gamestate_generatemap();
    gamestate_updatehexmouse();
    capital_selected = 0;
    grabbed.toplace = e_ME_none;
