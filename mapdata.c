@@ -593,6 +593,9 @@ static void      mapdata_placetree(struct maptile * tile)
    }
 }
 
+// This function assumes you have not messed with any of the tile
+// entities before you run this.
+// After this is run you can place any unit in the taken spot.
 static void      mapdata_taketile(struct maptile * tile, int new_owner, 
                                   int new_cap_x, int new_cap_y)
 {
@@ -1251,6 +1254,14 @@ int  mapdata_moveunit(struct mapcommandresult * result, int owner,
          src_tile->entity = e_ME_none;
       }
 
+      // Take the tile if we land in terrory that isn't ours
+      if(dest_tile->owner != owner)
+      {
+
+         mapdata_taketile(dest_tile, src_tile->owner, 
+                          src_tile->cap_x, src_tile->cap_y);
+      }
+
       dest_tile->entity = entity;
       if(cap != NULL)
       {
@@ -1275,13 +1286,6 @@ int  mapdata_moveunit(struct mapcommandresult * result, int owner,
          }
       }
 
-      // Take the tile if we land in terrory that isn't ours
-      if(dest_tile->owner != owner)
-      {
-
-         mapdata_taketile(dest_tile, src_tile->owner, 
-                          src_tile->cap_x, src_tile->cap_y);
-      }
 
       mapdata_updateupkeep();
    }
