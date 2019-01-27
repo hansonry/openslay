@@ -246,7 +246,7 @@ static void gamestate_generatemap(void)
 
    mapdata_fullclean();
 
-   mapdata_setmoneyallcapitals(50);
+   mapdata_setmoneyallcapitals(10);
 }
 
 void gamestate_onenter(struct gamestatesetting * _settings)

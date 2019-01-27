@@ -1303,6 +1303,24 @@ int mapdata_startturn(int owner)
    int sx[6], sy[6];
    // Grow Trees
 
+   // To Grow trees, we are going to use the seached flag to indicate
+   // trees from last round. That way we dont grow a bunch of trees in one
+   // round
+
+   for(i = 0; i < data.tiles.count; i++)
+   {     
+      tile = &data.tiles.base[i];
+      if(tile->entity == e_ME_tree ||
+         tile->entity == e_ME_palmtree)
+      {
+         tile->flags |= FLAGS_SEARCHED;
+      }
+      else
+      {
+         tile->flags &= ~FLAGS_SEARCHED;
+      }
+   }
+
    for(k = 0; k < data.tiles.count; k++)
    {
 
@@ -1329,11 +1347,13 @@ int mapdata_startturn(int owner)
             {
                water_count ++;
             }
-            else if(ltile->entity == e_ME_tree)
+            else if(ltile->entity == e_ME_tree && 
+                    (ltile->flags & FLAGS_SEARCHED) == FLAGS_SEARCHED)
             {
                tree_count ++;
             }
-            else if(ltile->entity == e_ME_palmtree)
+            else if(ltile->entity == e_ME_palmtree &&
+                    (ltile->flags & FLAGS_SEARCHED) == FLAGS_SEARCHED)
             {
                palmtree_count ++;
             }
