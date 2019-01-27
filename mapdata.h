@@ -92,6 +92,8 @@ void             mapdata_get6suroundingCoordinates(int x, int y,
 
 
 
+int  mapdata_startturn(int owner);
+
 int  mapdata_moveunit(struct mapcommandresult * result, int owner, 
                       int from_x, int from_y, int to_x, int to_y,
                       enum mapentity entity);

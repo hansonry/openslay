@@ -362,6 +362,9 @@ static SDL_Texture * gamestate_getUnitTexture(enum mapentity entity, SDL_Rect * 
    case e_ME_castle:
       text = imagedata->castle;
       break;
+   case e_ME_grave:
+      text = imagedata->grave;
+      break;
    }
    if(sr != NULL)
    {
@@ -653,6 +656,33 @@ void gamestate_event(SDL_Event * event)
       {
          gamestate_eventrightmouse(event->button.state);
       }
+   }
+   else if(event->type == SDL_KEYDOWN)
+   {
+      int owner;
+      if(event->key.keysym.sym == SDLK_1)
+      {
+         owner = 0;
+      }
+      else if(event->key.keysym.sym == SDLK_2)
+      {
+         owner = 1;
+      }
+      else if(event->key.keysym.sym == SDLK_3)
+      {
+         owner = 2;
+      }
+      else if(event->key.keysym.sym == SDLK_4)
+      {
+         owner = 3;
+      }
+      else if(event->key.keysym.sym == SDLK_5)
+      {
+         owner = 4;
+      }
+
+      mapdata_startturn(owner);
+
    }
 }
 

@@ -539,6 +539,35 @@ int              mapdata_getentitycost(enum mapentity entity)
    return cost;
 }
 
+static void      mapdata_placetree(struct maptile * tile)
+{
+   struct maptile * ltile;
+   int sx[6], sy[6];
+   int i;
+   int foundwater;
+   
+   mapdata_get6suroundingCoordinates(tile->x, tile->y, sx, sy);
+   foundwater = 0;
+   for(i = 0; i < 6; i++)
+   {
+      ltile = mapdata_gettile(sx[i], sy[i]);
+      if(ltile == NULL)
+      {
+         foundwater = 1;
+         break;
+      }
+   }
+
+   if(foundwater == 1)
+   {
+      tile->entity = e_ME_palmtree;
+   }
+   else
+   {
+      tile->entity = e_ME_tree;
+   }
+}
+
 static void      mapdata_taketile(struct maptile * tile, int new_owner, 
                                   int new_cap_x, int new_cap_y)
 {
@@ -596,8 +625,7 @@ static void      mapdata_taketile(struct maptile * tile, int new_owner,
          // Check to see if there is enughf room left to have a capital.
          if(cap->size < 2)
          {
-            // TODO: Pick the correct kind of tree.
-            ltile->entity = e_ME_tree;
+            mapdata_placetree(ltile);
             // Find the captial and remove it
             for(k = 0; k < data.caps.count; k++)
             {
@@ -1222,5 +1250,153 @@ int  mapdata_moveunit(struct mapcommandresult * result, int owner,
    return 1;
 }
 
+
+int mapdata_startturn(int owner)
+{
+   struct mapcapital * cap;
+   struct maptile * tile, * ltile;
+   size_t i, k;
+   int z;
+   int sx[6], sy[6];
+   // Grow Trees
+
+   for(k = 0; k < data.tiles.count; k++)
+   {
+
+      tile = &data.tiles.base[k];
+      if(tile->owner == owner && 
+         (tile->entity == e_ME_none ||
+          tile->entity == e_ME_grave))
+      {
+         // We can grow a tree here
+         // Count nearby trees and water
+         int palmtree_count;
+         int tree_count;
+         int water_count;
+
+         palmtree_count = 0;
+         tree_count = 0;
+         water_count = 0;
+
+         mapdata_get6suroundingCoordinates(tile->x, tile->y, sx, sy);
+         for(z = 0; z < 6; z++)
+         {
+            ltile = mapdata_gettile(sx[z], sy[z]);
+            if(ltile == NULL)
+            {
+               water_count ++;
+            }
+            else if(ltile->entity == e_ME_tree)
+            {
+               tree_count ++;
+            }
+            else if(ltile->entity == e_ME_palmtree)
+            {
+               palmtree_count ++;
+            }
+            
+         }
+
+         // Now if we have 2 trees, grow a tree.
+         // Not sure if we grow a palm tree next to the water or not
+         if(tree_count >= 2)
+         {
+            if(water_count > 0)
+            {
+               tile->entity = e_ME_palmtree;
+            }
+            else
+            {
+               tile->entity = e_ME_tree;
+            }
+         }
+         else if (water_count >= 1 && palmtree_count >= 1)
+         {
+            // If we are next to water and a palm tree, grow a palmtree
+            tile->entity = e_ME_palmtree;
+         }
+      }
+   }
+
+   // Transform Graves into Trees
+   for(k = 0; k < data.tiles.count; k++)
+   {
+
+      tile = &data.tiles.base[k];
+      if(tile->owner == owner &&
+         tile->entity == e_ME_grave)
+      {
+         mapdata_placetree(tile);
+      }
+   }
+
+
+   // Loop though all the capitals and find the owners
+   for(i = 0; i < data.caps.count; i++)
+   {
+      cap = &data.caps.base[i];
+      tile = mapdata_gettile(cap->x, cap->y);
+      if(tile == NULL)
+      {
+         fprintf(stderr, "mapdata_startturn: Unxpected Null Tile\n");
+         return 0;
+      }
+
+      if(tile->owner == owner)
+      {
+         // TODO: Maybe move this into it's own function
+
+
+         // Add the income to the money
+         cap->money += cap->income;
+
+         // Check to see if we are bankruped
+         if(cap->money < cap->upkeep)
+         {
+            // The terratory went bankrup everyone dies
+            cap->money = 0;
+
+            for(k = 0; k < data.tiles.count; k++)
+            {
+               ltile = &data.tiles.base[k];
+               if((ltile->entity == e_ME_peasant ||
+                   ltile->entity == e_ME_spearman ||
+                   ltile->entity == e_ME_knight ||
+                   ltile->entity == e_ME_baron) &&
+                   ltile->cap_x == cap->x &&
+                   ltile->cap_y == cap->y)
+               {
+                  ltile->entity = e_ME_grave;
+               }
+            }
+         }
+         else
+         {
+            // Yay we have money to live, subract the upkeep from the money
+            cap->money -= cap->upkeep;
+         }
+
+      }
+   }
+
+   // Finaly give all the units move positions
+   for(k = 0; k < data.tiles.count; k++)
+   {
+
+      ltile = &data.tiles.base[k];
+      if(ltile->owner == owner &&
+         (ltile->entity == e_ME_peasant ||
+          ltile->entity == e_ME_spearman ||
+          ltile->entity == e_ME_knight ||
+          ltile->entity == e_ME_baron))
+      {
+         ltile->flags |= FLAGS_CANMOVE;
+      }
+   }
+
+   mapdata_updateupkeep();
+   mapdata_updateincome();
+   return 1;
+}
 
 
