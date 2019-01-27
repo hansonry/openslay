@@ -33,9 +33,17 @@ struct outline
 };
 static struct outline outline;
 
+struct selectedcapital
+{
+   int isselected;
+   int x;
+   int y;
+};
+
+static struct selectedcapital selcap;
+
 static struct imagedata * imagedata;
 static int hexmouse_x, hexmouse_y;
-static int capital_selected, cap_x, cap_y;
 
 static struct gamestatesetting settings;
 
@@ -242,7 +250,8 @@ void gamestate_onenter(struct gamestatesetting * _settings)
 
    gamestate_generatemap();
    gamestate_updatehexmouse();
-   capital_selected = 0;
+
+   selcap.isselected = 0;
    grabbed.toplace = e_ME_none;
    grabbed.src_tile = NULL;
 }
@@ -318,9 +327,9 @@ static void gamestate_renderui(SDL_Renderer * rend)
    struct mapcapital * cap;
    int money;
 
-   if(capital_selected)
+   if(selcap.isselected == 1)
    {
-      cap = mapdata_getcapital(cap_x, cap_y);
+      cap = mapdata_getcapital(selcap.x, selcap.y);
       if(cap != NULL)
       {
          // If we are in the process of buying things then show the accurate balance
@@ -498,7 +507,7 @@ void gamestate_render(SDL_Renderer * rend)
 static void gamestate_updateoutline(void)
 {
    outline.count = 0;
-   if(capital_selected == 1)
+   if(selcap.isselected == 1)
    {
       int i, k, count;
       struct maptile * tile, * othertile;
@@ -507,15 +516,15 @@ static void gamestate_updateoutline(void)
       for(i = 0; i < count; i++)
       {
          tile = mapdata_getindex(i);
-         if(tile->cap_x == cap_x && tile->cap_y == cap_y)
+         if(tile->cap_x == selcap.x && tile->cap_y == selcap.y)
          {
             mapdata_get6suroundingCoordinates(tile->x, tile->y, sx, sy);
             for(k = 0; k < 6; k++)
             {
                othertile = mapdata_gettile(sx[k], sy[k]);
                if(othertile == NULL || 
-                  othertile->cap_x != cap_x || 
-                  othertile->cap_y != cap_y)
+                  othertile->cap_x != selcap.x || 
+                  othertile->cap_y != selcap.y)
                {
                   struct outlinepart * part;
                   // Add this to the outline
@@ -572,9 +581,9 @@ static void gamestate_eventleftmouse(int button_state)
       {
          if(tile != NULL && gamestate_maptilehascaptital(tile))
          {
-            capital_selected = 1;
-            cap_x = tile->cap_x;
-            cap_y = tile->cap_y;
+            selcap.isselected = 1;
+            selcap.x = tile->cap_x;
+            selcap.y = tile->cap_y;
             if((tile->entity == e_ME_peasant ||
                 tile->entity == e_ME_spearman ||
                 tile->entity == e_ME_knight ||
@@ -603,8 +612,8 @@ static void gamestate_eventleftmouse(int button_state)
          {
             if(result.mapchanged_flag == 1)
             {
-               cap_x = grabbed.src_tile->cap_x;
-               cap_y = grabbed.src_tile->cap_y;
+               selcap.x = grabbed.src_tile->cap_x;
+               selcap.y = grabbed.src_tile->cap_y;
                gamestate_updateoutline();
             }
             grabbed.src_tile = NULL;
@@ -627,10 +636,10 @@ static void gamestate_eventrightmouse(int button_state)
    struct maptile * tile;
    if(button_state == SDL_PRESSED)
    {
-      if(capital_selected == 1 && grabbed.toplace == e_ME_none)
+      if(selcap.isselected == 1 && grabbed.toplace == e_ME_none)
       {
-         cap = mapdata_getcapital(cap_x, cap_y);
-         tile = mapdata_gettile(cap_x, cap_y);
+         cap = mapdata_getcapital(selcap.x, selcap.y);
+         tile = mapdata_gettile(selcap.x, selcap.y);
          if(cap != NULL && tile != NULL && cap->money >= 10)
          {
             grabbed.toplace = e_ME_peasant;

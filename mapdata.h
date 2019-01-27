@@ -51,7 +51,6 @@ enum mapcommandresulttype
    e_MCRT_destblockedbybuilding, // You attempted to move your unit onto a capital or castle
    e_MCRT_sourceunitcantmove, // The unit you attempted to move has alread moved this turn
    e_MCRT_combinedunitabovemax, // The resulting unit would be above barron.
-   e_MCRT_notabuyableunit, // You attempted to buy something that doesn't make sence like a tree
    e_MCRT_cantupgradetocastle, // You tried to upgrade a unit to a castle
    e_MCRT_cantcastleattack, // You attempted to place a casle outside you terratory
    e_MCRT_error // A logical error has occured, this should never happen.
