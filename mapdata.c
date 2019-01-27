@@ -1398,6 +1398,7 @@ int mapdata_startturn(int owner)
          {
             // The terratory went bankrup everyone dies
             cap->money = 0;
+            tile->flags &= ~FLAGS_CANMOVE;
 
             for(k = 0; k < data.tiles.count; k++)
             {
@@ -1417,6 +1418,14 @@ int mapdata_startturn(int owner)
          {
             // Yay we have money to live, subract the upkeep from the money
             cap->money -= cap->upkeep;
+            if(cap->money >= 10)
+            {
+               tile->flags |= FLAGS_CANMOVE;
+            }
+            else
+            {
+               tile->flags &= ~FLAGS_CANMOVE;
+            }
          }
 
       }
