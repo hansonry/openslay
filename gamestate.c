@@ -548,7 +548,15 @@ void gamestate_render(SDL_Renderer * rend)
 
          gamestate_hexposition(tile->x, tile->y, &dr);
 
-         animate_flag = mapdata_getcanmove(tile);
+         if(tile->owner == currentowner ||
+            currentowner == -1)
+         {
+            animate_flag = mapdata_getcanmove(tile);
+         }
+         else
+         {
+            animate_flag = 0;
+         }
          
          text = gamestate_getUnitTexture(tile->entity, &sr, animate_flag);
       }
