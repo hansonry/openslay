@@ -466,6 +466,7 @@ void             mapdata_fullclean(void)
    }
 
    // Count The area for each captital and setup the income 
+   // Also mark the can move flags on the capital
    for(i = 0; i < data.caps.count; i++)
    {
       cap = &data.caps.base[i];
@@ -476,7 +477,17 @@ void             mapdata_fullclean(void)
          return;
       }
       cap->size = mapdata_paintcapital(tile);
+
+      if(cap->money >= 10)
+      {
+         tile->flags |= FLAGS_CANMOVE;
+      }
+      else
+      {
+         tile->flags &= ~FLAGS_CANMOVE;
+      }
    }
+
 
    // update the incomes
    mapdata_updateincome();
@@ -503,11 +514,25 @@ struct mapcapital * mapdata_getcapital(int x, int y)
 void             mapdata_setmoneyallcapitals(int amount)
 {
    struct mapcapital * cap;
+   struct maptile * tile;
    size_t i;
    for(i = 0; i < data.caps.count; i++)
    {
       cap = &data.caps.base[i];
       cap->money = amount;
+
+      tile = mapdata_gettile(cap->x, cap->y);
+      if(tile != NULL)
+      {
+         if(amount >= 10)
+         {
+            tile->flags |= FLAGS_CANMOVE;  
+         }
+         else
+         {
+            tile->flags &= ~FLAGS_CANMOVE;
+         }
+      }
    }
 }
 
@@ -743,6 +768,15 @@ static void      mapdata_taketile(struct maptile * tile, int new_owner,
       ltile->cap_x = ltile->x;
       ltile->cap_y = ltile->y;
       largest_cap->size = mapdata_paintcapital(ltile);
+
+      if(largest_cap->money >= 10)
+      {
+         ltile->flags |= FLAGS_CANMOVE;
+      }
+      else
+      {
+         ltile->flags &= ~FLAGS_CANMOVE;
+      }
    }
 
    mapdata_updateincome();
@@ -853,20 +887,17 @@ static enum mapentity mapdata_sumunit(enum mapentity e1, enum mapentity e2)
    return result;
 }
 
-// Buying the unit set the to_x and to_y to the capital
-int  mapdata_moveunit(struct mapcommandresult * result, int owner, 
-                      int from_x, int from_y, int to_x, int to_y,
-                      enum mapentity entity)
+static int mapdata_commonmove(struct mapcommandresult * result, int owner, 
+                              struct maptile * src_tile, 
+                              struct maptile * dest_tile,
+                              enum mapentity * entity,
+                              int * cost, struct mapcapital ** cap)
 {
-   struct maptile * src_tile;
-   struct maptile * dest_tile;
    enum mapentity lentity;
    int sx[6], sy[6];
    struct maptile * stile[6];
    int i;
    int found;
-   struct mapcapital * cap;
-   int cost;
 
    if(result != NULL)
    {
@@ -874,11 +905,11 @@ int  mapdata_moveunit(struct mapcommandresult * result, int owner,
    }
 
    // Check our entity to see if it is valid
-   if(entity != e_ME_castle && 
-      entity != e_ME_peasant &&
-      entity != e_ME_spearman &&
-      entity != e_ME_knight &&
-      entity != e_ME_baron)
+   if((*entity) != e_ME_castle && 
+      (*entity) != e_ME_peasant &&
+      (*entity) != e_ME_spearman &&
+      (*entity) != e_ME_knight &&
+      (*entity) != e_ME_baron)
    {
       if(result != NULL)
       {
@@ -888,16 +919,6 @@ int  mapdata_moveunit(struct mapcommandresult * result, int owner,
       return 0;
    }
 
-   // Check our source tile to see if it exists
-   src_tile = mapdata_gettile(from_x, from_y);
-   if(src_tile == NULL)
-   {
-      if(result != NULL)
-      {
-         result->type = e_MCRT_sourcenottile;
-      }
-      return 0;
-   }
 
    // Check our source entity to see if it is valid
    if(src_tile->entity != e_ME_capital && // used to create units 
@@ -939,17 +960,17 @@ int  mapdata_moveunit(struct mapcommandresult * result, int owner,
    }
 
    // Are we just moving a unit or upgrading it too?
-   if(src_tile->entity != entity)
+   if(src_tile->entity != *entity)
    {
 
       // We are upgrading or buying the unit. Compute the cost
 
-      cost = mapdata_getentitycost(entity) -
-             mapdata_getentitycost(src_tile->entity);
+      (*cost) = mapdata_getentitycost(*entity) -
+                mapdata_getentitycost(src_tile->entity);
 
       // Check to see if we have the money and a capital
-      cap = mapdata_getcapital(src_tile->cap_x, src_tile->cap_y);
-      if(cap == NULL)
+      (*cap) = mapdata_getcapital(src_tile->cap_x, src_tile->cap_y);
+      if((*cap) == NULL)
       {
          if(result != NULL)
          {
@@ -959,7 +980,7 @@ int  mapdata_moveunit(struct mapcommandresult * result, int owner,
       }
 
 
-      if(cap->money < cost)
+      if((*cap)->money < (*cost))
       {
          if(result != NULL)
          {
@@ -970,23 +991,13 @@ int  mapdata_moveunit(struct mapcommandresult * result, int owner,
    }
    else
    {
-      cap = NULL;
-      cost = 0;
+      (*cap) = NULL;
+      (*cost) = 0;
    }
 
-   // Check the destination tile
-   dest_tile = mapdata_gettile(to_x, to_y);
-   if(dest_tile == NULL)
-   {
-      if(result != NULL)
-      {
-         result->type = e_MCRT_destnottile;
-      }
-      return 0;
-   }
 
    // Castle specific stuff
-   if(entity == e_ME_castle)
+   if((*entity) == e_ME_castle)
    {
       // You can only buy castles, not upgrade to them
       if(src_tile->entity != e_ME_capital)
@@ -1016,15 +1027,13 @@ int  mapdata_moveunit(struct mapcommandresult * result, int owner,
          {
             result->type = e_MCRT_blocked;
             result->blockedby = dest_tile->entity;
-            result->blockedby_x = to_x;
-            result->blockedby_y = to_y;
+            result->blockedby_x = dest_tile->x;
+            result->blockedby_y = dest_tile->y;
          }
          return 0;
       }
 
       // Ok we can place the castle now
-      dest_tile->entity = entity;
-      cap->money -= cost;
       if(result != NULL)
       {
          result->type = e_MCRT_success;
@@ -1036,13 +1045,6 @@ int  mapdata_moveunit(struct mapcommandresult * result, int owner,
    // Check to see if we are placing the unit right back down
    if(src_tile == dest_tile)
    {
-      dest_tile->entity = entity;
-      if(cap != NULL)
-      {
-         cap->money -= cost;
-      }
-
-      mapdata_updateupkeep();
       if(result != NULL)
       {
          result->type = e_MCRT_success;
@@ -1060,17 +1062,6 @@ int  mapdata_moveunit(struct mapcommandresult * result, int owner,
       case e_ME_none:
          // Nothing here, just move the unit and mark it as good to move again
          dest_tile->flags |= FLAGS_CANMOVE;
-         if(src_tile->entity != e_ME_capital)
-         {
-            src_tile->entity = e_ME_none;
-         }
-         dest_tile->entity = entity;
-         if(cap != NULL)
-         {
-            cap->money -= cost;
-         }
-
-         mapdata_updateupkeep();
          if(result != NULL)
          {
             result->type = e_MCRT_success;
@@ -1082,16 +1073,6 @@ int  mapdata_moveunit(struct mapcommandresult * result, int owner,
       case e_ME_grave:
          // Cleanup the blockers and mark the unit as moved
          dest_tile->flags &= ~FLAGS_CANMOVE;
-         if(src_tile->entity != e_ME_capital)
-         {
-            src_tile->entity = e_ME_none;
-         }
-         dest_tile->entity = entity;
-         if(cap != NULL)
-         {
-            cap->money -= cost;
-         }
-         mapdata_updateupkeep();
          if(result != NULL)
          {
             result->type = e_MCRT_success;
@@ -1104,7 +1085,7 @@ int  mapdata_moveunit(struct mapcommandresult * result, int owner,
       case e_ME_baron:
          // Combine the two units. Use the movement state of
          // the destination unit.
-         lentity = mapdata_sumunit(entity, dest_tile->entity);
+         lentity = mapdata_sumunit(*entity, dest_tile->entity);
          if(lentity == e_ME_grave) // Grave indicates larger than barron
          {
             if(result != NULL)
@@ -1124,17 +1105,7 @@ int  mapdata_moveunit(struct mapcommandresult * result, int owner,
          }
          else
          {
-            if(src_tile->entity != e_ME_capital)
-            {
-               src_tile->entity = e_ME_none;
-            }
-            dest_tile->entity = lentity;
-
-            mapdata_updateupkeep();
-            if(cap != NULL)
-            {
-               cap->money -= cost;
-            }
+            *entity = lentity;
 
             if(result != NULL)
             {
@@ -1156,7 +1127,7 @@ int  mapdata_moveunit(struct mapcommandresult * result, int owner,
    // We are not moving onto our terrain if we get here
 
    // Gather information about the surrounding tiles
-   mapdata_get6suroundingCoordinates(to_x, to_y, sx, sy);
+   mapdata_get6suroundingCoordinates(dest_tile->x, dest_tile->y, sx, sy);
    for(i = 0; i < 6; i++)
    {
       stile[i] = mapdata_gettile(sx[i], sy[i]);
@@ -1185,7 +1156,7 @@ int  mapdata_moveunit(struct mapcommandresult * result, int owner,
    }
 
    // Can we win a fight with what is in the destination tile
-   if(!mapdata_wincheck(entity, dest_tile->entity))
+   if(!mapdata_wincheck(*entity, dest_tile->entity))
    {
       if(result != NULL)
       {
@@ -1205,7 +1176,7 @@ int  mapdata_moveunit(struct mapcommandresult * result, int owner,
       if(stile[i] != NULL &&
          dest_tile->cap_x == stile[i]->cap_x && // Check to see if this is the same cap as
          dest_tile->cap_y == stile[i]->cap_y && // the defending tile
-         !mapdata_wincheck(entity, stile[i]->entity)) // See if we lose 
+         !mapdata_wincheck(*entity, stile[i]->entity)) // See if we lose 
       {
          // So we lost a fight with something one away from the defending tile
          // that is the same capital. So we can make this move
@@ -1223,31 +1194,99 @@ int  mapdata_moveunit(struct mapcommandresult * result, int owner,
    // At this point there is nothing stopping the attacker from taking this
    // spot. So take it.
 
-   mapdata_taketile(dest_tile, src_tile->owner, 
-                    src_tile->cap_x, src_tile->cap_y);
 
-   dest_tile->entity = entity;
    dest_tile->flags &= ~FLAGS_CANMOVE;
    
-
-   if(cap != NULL)
-   {
-      cap->money -= cost;
-   }
-
-   if(src_tile->entity != e_ME_capital)
-   {
-      src_tile->entity = e_ME_none;
-   }
-   
-   mapdata_updateupkeep();
-
    if(result != NULL)
    {
       result->type = e_MCRT_success;
       result->mapchanged_flag = 1;
    }
    return 1;
+}
+
+// Buying the unit set the to_x and to_y to the capital
+int  mapdata_moveunit(struct mapcommandresult * result, int owner, 
+                      int from_x, int from_y, int to_x, int to_y,
+                      enum mapentity entity)
+{
+   int cost;
+   int rvalue;
+   struct mapcapital * cap;
+   struct maptile * src_tile;
+   struct maptile * dest_tile;
+   struct maptile * cap_tile;
+
+   // Check our source tile to see if it exists
+   src_tile = mapdata_gettile(from_x, from_y);
+   if(src_tile == NULL)
+   {
+      if(result != NULL)
+      {
+         result->type = e_MCRT_sourcenottile;
+      }
+      return 0;
+   }
+
+   // Check the destination tile
+   dest_tile = mapdata_gettile(to_x, to_y);
+   if(dest_tile == NULL)
+   {
+      if(result != NULL)
+      {
+         result->type = e_MCRT_destnottile;
+      }
+      return 0;
+   }
+
+   rvalue = mapdata_commonmove(result, owner, 
+                               src_tile, 
+                               dest_tile, 
+                               &entity, &cost, &cap);
+
+   if(rvalue == 1)
+   {
+      if(src_tile->entity != e_ME_capital)
+      {
+         src_tile->entity = e_ME_none;
+      }
+
+      dest_tile->entity = entity;
+      if(cap != NULL)
+      {
+         cap->money -= cost;
+
+         cap_tile = mapdata_gettile(cap->x, cap->y);
+
+         if(cap_tile == NULL)
+         {
+            fprintf(stderr, "mapdata_moveunit: Error, captial has no tile\n");
+         }
+         else
+         {
+            if(cap->money >= 10)
+            {
+               cap_tile->flags |= FLAGS_CANMOVE;
+            }
+            else
+            {
+               cap_tile->flags &= ~FLAGS_CANMOVE;
+            }
+         }
+      }
+
+      // Take the tile if we land in terrory that isn't ours
+      if(dest_tile->owner != owner)
+      {
+
+         mapdata_taketile(dest_tile, src_tile->owner, 
+                          src_tile->cap_x, src_tile->cap_y);
+      }
+
+      mapdata_updateupkeep();
+   }
+
+   return rvalue;
 }
 
 

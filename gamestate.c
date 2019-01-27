@@ -43,11 +43,20 @@ struct selectedcapital
 static struct selectedcapital selcap;
 
 
+#define ANIMATION_TIMEOUT    0.5f
+#define ANIMATION_MAXSTATES  2
+struct animation
+{
+   float timer;
+   int state;
+};
+static struct animation animation;
+
 static struct imagedata * imagedata;
 static int hexmouse_x, hexmouse_y;
 
 static struct gamestatesetting settings;
-static int currentowner;
+static int currentowner; // -1 = debug turns
 
 struct grabbed
 {
@@ -177,6 +186,10 @@ void gamestate_init(void)
    outline.size = OUTLINE_GROWBY;
    outline.count = 0;
    outline.base = malloc(sizeof(struct outlinepart) * outline.size);
+
+   // intialize Animation
+   animation.timer = 0;
+   animation.state = 0;
 }
 
 void gamestate_destroy(void)
@@ -267,6 +280,18 @@ void gamestate_onexit(void)
 
 void gamestate_update(float dt)
 {
+
+   // Update the animation timer
+   animation.timer += dt;
+   if(animation.timer >= ANIMATION_TIMEOUT)
+   {
+      animation.timer -= ANIMATION_TIMEOUT;
+      animation.state ++;
+      if(animation.state >= ANIMATION_MAXSTATES)
+      {
+         animation.state = 0;
+      }
+   }
 }
 
 #define BMFONT_WIDTH      10
@@ -379,7 +404,9 @@ static void gamestate_renderui(SDL_Renderer * rend)
    }
 }
 
-static SDL_Texture * gamestate_getUnitTexture(enum mapentity entity, SDL_Rect * sr)
+static SDL_Texture * gamestate_getUnitTexture(enum mapentity entity, 
+                                              SDL_Rect * sr,
+                                              int animate_flag)
 {
    SDL_Texture * text;
    SDL_Rect isr;
@@ -415,6 +442,21 @@ static SDL_Texture * gamestate_getUnitTexture(enum mapentity entity, SDL_Rect * 
       break;
    case e_ME_capital:
       text = imagedata->capital;
+      if(animate_flag == 1)
+      {
+         if(animation.state == 0)
+         {
+            isr.x = 32;
+         }
+         else
+         {
+            isr.x = 64;
+         }
+      }
+      else
+      {
+         isr.x = 0;
+      }
       break;
    case e_ME_castle:
       text = imagedata->castle;
@@ -423,6 +465,19 @@ static SDL_Texture * gamestate_getUnitTexture(enum mapentity entity, SDL_Rect * 
       text = imagedata->grave;
       break;
    }
+   
+   if(text == imagedata->unit)
+   {
+      if(animate_flag == 1 && animation.state == 1)
+      {
+         isr.x = 32;
+      }
+      else
+      {
+         isr.x = 0;
+      }
+   }
+
    if(sr != NULL)
    {
       sr->x = isr.x;
@@ -488,11 +543,14 @@ void gamestate_render(SDL_Renderer * rend)
       }
       else
       {
+         int animate_flag;
          dr.w = dr.h = 32;
 
          gamestate_hexposition(tile->x, tile->y, &dr);
+
+         animate_flag = mapdata_getcanmove(tile);
          
-         text = gamestate_getUnitTexture(tile->entity, &sr);
+         text = gamestate_getUnitTexture(tile->entity, &sr, animate_flag);
       }
       if(text != NULL)
       {
@@ -514,7 +572,7 @@ void gamestate_render(SDL_Renderer * rend)
 
    if(grabbed.toplace != e_ME_none)
    {
-      text = gamestate_getUnitTexture(grabbed.toplace, &sr);
+      text = gamestate_getUnitTexture(grabbed.toplace, &sr, 1);
       if(text != NULL)
       {
          SDL_GetMouseState(&dr.x, &dr.y);
@@ -724,28 +782,29 @@ void gamestate_event(SDL_Event * event)
    {
       int owner;
       owner = -1;
-      if(event->key.keysym.sym == SDLK_1)
+      if(event->key.keysym.sym == SDLK_1 && currentowner == -1)
       {
          owner = 0;
       }
-      else if(event->key.keysym.sym == SDLK_2)
+      else if(event->key.keysym.sym == SDLK_2 && currentowner == -1)
       {
          owner = 1;
       }
-      else if(event->key.keysym.sym == SDLK_3)
+      else if(event->key.keysym.sym == SDLK_3 && currentowner == -1)
       {
          owner = 2;
       }
-      else if(event->key.keysym.sym == SDLK_4)
+      else if(event->key.keysym.sym == SDLK_4 && currentowner == -1)
       {
          owner = 3;
       }
-      else if(event->key.keysym.sym == SDLK_5)
+      else if(event->key.keysym.sym == SDLK_5 && currentowner == -1)
       {
          owner = 4;
       }
-      else if(event->key.keysym.sym == SDLK_SPACE)
+      else if(event->key.keysym.sym == SDLK_SPACE && currentowner != -1)
       {
+         // Move forward a turn
          currentowner ++;
          if(currentowner >= settings.playercount)
          {
