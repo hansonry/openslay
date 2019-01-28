@@ -327,6 +327,114 @@ static int       mapdata_paintcapital(struct maptile * tile)
 
 }
 
+static int mapdata_computecaptialscore(struct maptile * tile)
+{
+   int score;
+   int i;
+   int xs[6], ys[6];
+   struct maptile * ltile;
+   if(tile->entity == e_ME_none)
+   {
+      // Lets figure out how well defended this thing is
+      score = 12;
+      mapdata_get6suroundingCoordinates(tile->x, tile->y, xs, ys);
+      for(i = 0; i < 6; i++)
+      {
+         ltile = mapdata_gettile(xs[i], ys[i]);
+         if(ltile == NULL)
+         {
+            score += 6;
+         }
+         else if(ltile->cap_x == tile->cap_x &&
+                 ltile->cap_y == tile->cap_y)
+         {
+            switch(ltile->entity)
+            {
+            default:
+               // Do nothing on purpose (Add 0)
+               break;
+            case e_ME_peasant:  score += 1; break;
+            case e_ME_spearman: score += 2; break;
+            case e_ME_castle:   score += 3; break;
+            case e_ME_knight:   score += 4; break;
+            case e_ME_baron:    score += 5; break;
+            }
+         }
+         else
+         {
+            // This is a hostile tile. It's best to put some room between
+            score -= 2;
+         }
+
+      }
+
+   }
+   else
+   {
+      // Try not to remove anything
+      // Even trees, That would give you a benifit
+      switch(tile->entity)
+      {
+      case e_ME_baron:    score = -6; break;
+      case e_ME_knight:   score = -5; break;
+      case e_ME_castle:   score = -4; break;
+      case e_ME_spearman: score = -3; break;
+      case e_ME_peasant:  score = -2; break;
+      case e_ME_tree:     score = -1; break;
+      case e_ME_palmtree: score = -1; break;
+      case e_ME_grave:    score = -1; break;
+      default:            score = 0;  break;
+      }
+   }
+   return score;
+}
+
+// cap_x and cap_y are the current temperary capital of the
+// terratory
+static struct maptile * mapdata_findgoodcapitalplace(int cap_x, int cap_y)
+{
+   struct maptile * tile, *best;
+   size_t i;
+   int bestscore;
+   best = NULL;
+
+   for(i = 0; i < data.tiles.count; i++)
+   {
+      tile = &data.tiles.base[i];
+      if(tile->cap_x == cap_x &&
+         tile->cap_y == cap_y)
+      {
+         int thisscore;
+         thisscore = mapdata_computecaptialscore(tile);
+         if(best == NULL || thisscore > bestscore)
+         {
+            best = tile;
+            bestscore = thisscore;
+         }
+      }
+   }
+
+   return best;
+}
+
+static void mapdata_shiftcaptial(int src_x, int src_y, int dest_x, int dest_y)
+{
+   struct maptile * tile;
+   size_t i;
+
+   for(i = 0; i < data.tiles.count; i++)
+   {
+      tile = &data.tiles.base[i];
+      if(tile->cap_x == src_x && tile->cap_y == src_y)
+      {
+         tile->cap_x = dest_x;
+         tile->cap_y = dest_y;
+      }
+   }
+   
+}
+
+
 // In this function we are trusting tile owners, positions, trees, and units
 // Everything else this function will clean up
 void             mapdata_fullclean(void)
@@ -406,16 +514,17 @@ void             mapdata_fullclean(void)
          count = mapdata_paintcapital(tile);
          if(count > 1)
          {
+            struct maptile * best;
+            best = mapdata_findgoodcapitalplace(tile->x, tile->y);
+            mapdata_shiftcaptial(tile->x, tile->y, best->x, best->y);
             //printf("Make Captial\n");
-            // TODO: Place a capital in a nice place
             // We should have a capital here, so add a capital
-            // Grow the data if nessary
             cap = mapdata_addcapital(NULL);
 
             cap->money = 0;
-            cap->x = tile->x;
-            cap->y = tile->y;
-            tile->entity = e_ME_capital;
+            cap->x = best->x;
+            cap->y = best->y;
+            best->entity = e_ME_capital;
          }
       }
    }
@@ -593,6 +702,7 @@ static void      mapdata_placetree(struct maptile * tile)
    }
 }
 
+
 // This function assumes you have not messed with any of the tile
 // entities before you run this.
 // After this is run you can place any unit in the taken spot.
@@ -684,10 +794,14 @@ static void      mapdata_taketile(struct maptile * tile, int new_owner,
          size = mapdata_paintcapital(ltile);
          if(size > 1)
          {
-            ltile->entity = e_ME_capital;
+            struct maptile * best;
+            best = mapdata_findgoodcapitalplace(ltile->x, ltile->y);
+            mapdata_shiftcaptial(ltile->x, ltile->y, best->x, best->y);
+
+            best->entity = e_ME_capital;
             cap = mapdata_addcapital(NULL);
-            cap->x = ltile->x;
-            cap->y = ltile->y;
+            cap->x = best->x;
+            cap->y = best->y;
             cap->money = 0;
             cap->size = size;
          }
@@ -1249,20 +1363,17 @@ int  mapdata_moveunit(struct mapcommandresult * result, int owner,
 
    if(rvalue == 1)
    {
+      // Note: The order of this block of code is very important
+      // and strange
+
+      // First clear old tile if nessary
       if(src_tile->entity != e_ME_capital)
       {
          src_tile->entity = e_ME_none;
       }
 
-      // Take the tile if we land in terrory that isn't ours
-      if(dest_tile->owner != owner)
-      {
 
-         mapdata_taketile(dest_tile, src_tile->owner, 
-                          src_tile->cap_x, src_tile->cap_y);
-      }
-
-      dest_tile->entity = entity;
+      // Charge the money if nessary
       if(cap != NULL)
       {
          cap->money -= cost;
@@ -1285,6 +1396,17 @@ int  mapdata_moveunit(struct mapcommandresult * result, int owner,
             }
          }
       }
+
+      // Take the tile if we land in terrory that isn't ours
+      if(dest_tile->owner != owner)
+      {
+
+         mapdata_taketile(dest_tile, src_tile->owner, 
+                          src_tile->cap_x, src_tile->cap_y);
+      }
+
+      // Finaly set the entity
+      dest_tile->entity = entity;
 
 
       mapdata_updateupkeep();

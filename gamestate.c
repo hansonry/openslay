@@ -270,7 +270,7 @@ void gamestate_onenter(struct gamestatesetting * _settings)
    grabbed.toplace = e_ME_none;
    grabbed.src_tile = NULL;
 
-   currentowner = 0;
+   currentowner = 0; // Set to -1 for debug move
 }
 
 void gamestate_onexit(void)
@@ -359,14 +359,17 @@ static void gamestate_renderui(SDL_Renderer * rend)
    SDL_Rect dr;
 
    y = 32;
-   SDL_SetTextureColorMod(imagedata->hex, 
-                          teamcolors[currentowner].r,
-                          teamcolors[currentowner].g,
-                          teamcolors[currentowner].b);
-   dr.h = dr.w = 32;
-   dr.x = 400;
-   dr.y = y;
-   SDL_RenderCopy(rend, imagedata->hex, NULL, &dr);
+   if(currentowner != -1)
+   {
+      SDL_SetTextureColorMod(imagedata->hex, 
+                             teamcolors[currentowner].r,
+                             teamcolors[currentowner].g,
+                             teamcolors[currentowner].b);
+      dr.h = dr.w = 32;
+      dr.x = 400;
+      dr.y = y;
+      SDL_RenderCopy(rend, imagedata->hex, NULL, &dr);
+   }
 
    y += 64;
 
