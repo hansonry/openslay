@@ -804,6 +804,7 @@ static void      mapdata_taketile(struct maptile * tile, int new_owner,
             cap->y = best->y;
             cap->money = 0;
             cap->size = size;
+            best->flags &= ~FLAGS_CANMOVE;
          }
       }
    }
@@ -1570,6 +1571,24 @@ int mapdata_startturn(int owner)
             }
          }
 
+      }
+   }
+
+   // Kill all units that don't have a capital
+   for(k = 0; k < data.tiles.count; k++)
+   {
+      ltile = &data.tiles.base[k];
+      if(ltile->owner == owner &&
+         (ltile->entity == e_ME_peasant ||
+          ltile->entity == e_ME_spearman ||
+          ltile->entity == e_ME_knight ||
+          ltile->entity == e_ME_baron))
+      {
+         cap = mapdata_getcapital(ltile->cap_x, ltile->cap_y);
+         if(cap == NULL)
+         {
+            ltile->entity = e_ME_grave;
+         }
       }
    }
 
