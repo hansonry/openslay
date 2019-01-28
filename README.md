@@ -27,6 +27,7 @@ sudo apt-get install build-essential libsdl2-dev libsdl2-image-dev
 ```
 
 **Windows**
+
 If you are building in windows you need to have access to the visual studio compiler tools in order to build. To get that, you can run the SetupWindowsCompiler.bat file
 
 ```
