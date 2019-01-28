@@ -9,11 +9,11 @@ These instructions will get you a copy of the project up and running on your loc
 ### Prerequisites
 
 * **Build tools:**
-..* C compiler
-..* Bam
+  * C compiler
+  * Bam
 * **Libraries**
-..* SDL2
-..* SDL2_image
+  * SDL2
+  * SDL2_image
 
 
 
