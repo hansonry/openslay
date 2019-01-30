@@ -6,8 +6,14 @@
 
 #define GROWBY 32
 
-#define FLAGS_SEARCHED      0x01
-#define FLAGS_CANMOVE  0x02
+#define FLAGS_SEARCHED   0x01
+#define FLAGS_CANMOVE    0x02
+
+
+struct mdplayerdata
+{
+   int owner;
+};
 
 
 struct mapdata
@@ -24,6 +30,13 @@ struct mapdata
       size_t size;
       size_t count;
    } caps;
+   struct mdplayer
+   {
+      int current;
+      size_t count;
+      size_t size;
+      struct mdplayerdata * base;
+   } players;
 };
 
 static struct mapdata data;
@@ -37,6 +50,12 @@ void mapdata_init(void)
    data.caps.size = GROWBY;
    data.caps.base = malloc(sizeof(struct mapcapital) * data.caps.size);
    data.caps.count = 0;
+
+   data.players.size = GROWBY;
+   data.players.base = malloc(sizeof(struct mdplayerdata) * data.players.size);
+   data.players.count = 0;
+
+   data.players.current = 0;
 }
 
 void mapdata_destroy(void)
@@ -45,15 +64,85 @@ void mapdata_destroy(void)
    data.tiles.base = NULL;
    data.tiles.size = 0;
    data.tiles.count = 0;
+
    free(data.caps.base);
    data.caps.base = NULL;
    data.caps.size = 0;
    data.caps.count = 0;
+
+   free(data.players.base);
+   data.players.base = NULL;
+   data.players.size = 0;
+   data.players.count = 0;
 }
 
 int mapdata_count(void)
 {
    return data.tiles.count;
+}
+
+int  mapdata_getcurrentplayer(void)
+{
+   return data.players.current;
+}
+
+void mapdata_setcurrentplayer(int player)
+{
+   if(player >= -1 && player < (int)data.players.count)
+   {
+      data.players.current = player;
+   }
+}
+
+int  mapdata_getplayercount(void)
+{
+   return data.players.count;
+}
+
+void mapdata_setplayercount(int count)
+{
+   if(count >= data.players.size)
+   {
+      data.players.size = count + GROWBY;
+      data.players.base = realloc(data.players.base, 
+                                  sizeof(struct mdplayerdata) * 
+                                  data.players.size);
+   }
+
+   data.players.count = count;
+}
+
+void mapdata_setplayerowner(int playerindex, int owner)
+{
+   if(playerindex >= 0 && playerindex < data.players.count)
+   {
+      data.players.base[playerindex].owner = owner; 
+   }
+}
+
+int  mapdata_getplayerowner(int playerindex)
+{
+   if(playerindex >= 0 && playerindex < data.players.count)
+   {
+      return data.players.base[playerindex].owner;
+   }
+   return 0;
+}
+
+int  mapdata_getplayerfromowner(int owner)
+{
+   struct mdplayerdata * d;
+   size_t i;
+
+   for(i = 0; i < data.players.count; i++)
+   {
+      d = &data.players.base[i];
+      if(d->owner == owner)
+      {
+         return i;
+      }
+   }
+   return -1;
 }
 
 static struct maptile * mapdata_findtile(int x, int y, size_t * index)
@@ -601,6 +690,31 @@ void             mapdata_fullclean(void)
    // update the incomes
    mapdata_updateincome();
    mapdata_updateupkeep();
+
+   // Count the number of players 
+   mapdata_setplayercount(0);
+   for(i = 0; i < data.tiles.count; i++)
+   {
+      int found;
+      tile = &data.tiles.base[i];
+      found = 0;
+      for(k = 0; k < data.players.count; k++)
+      {
+         if(data.players.base[k].owner == tile->owner)
+         {
+            found = 1;
+            break;
+         }
+      }
+
+      if(found == 0)
+      {
+         mapdata_setplayercount(data.players.count + 1);
+         data.players.base[data.players.count - 1].owner = tile->owner;
+         //printf("Player %d uses owner %d\n", data.players.count -1, tile->owner);
+      }
+
+   }
 }
 
 struct mapcapital * mapdata_getcapital(int x, int y)
@@ -1335,6 +1449,17 @@ int  mapdata_moveunit(struct mapcommandresult * result, int owner,
    struct maptile * dest_tile;
    struct maptile * cap_tile;
 
+   if(data.players.current != -1 &&
+      data.players.base[data.players.current].owner != owner)
+   {
+      if(result != NULL)
+      {
+         result->type = e_MCRT_wrongowner;
+      }
+      return 0;
+   }
+   
+
    // Check our source tile to see if it exists
    src_tile = mapdata_gettile(from_x, from_y);
    if(src_tile == NULL)
@@ -1416,6 +1541,21 @@ int  mapdata_moveunit(struct mapcommandresult * result, int owner,
    return rvalue;
 }
 
+
+int  mapdata_endturn(void)
+{
+   if(data.players.current >= 0)
+   {
+      data.players.current ++;
+      if(data.players.current >= data.players.count)
+      {
+         data.players.current = 0;
+      }
+
+      mapdata_startturn(data.players.base[data.players.current].owner);
+   }
+   return data.players.current;
+}
 
 int mapdata_startturn(int owner)
 {

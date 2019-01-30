@@ -39,6 +39,7 @@ struct mapcapital
 enum mapcommandresulttype
 {
    e_MCRT_success, // Everything was good
+   e_MCRT_wrongowner, // The owner does not match the current player
    e_MCRT_notreachable, // You attempted to place a unit on a spot it can't get to
    e_MCRT_notacapital, // The capital you provided is actualy not a capital
    e_MCRT_notenoughmoney, // Not enugh money to do that thing
@@ -70,6 +71,14 @@ void mapdata_destroy(void);
 
 int mapdata_count(void);
 
+int  mapdata_getcurrentplayer(void);
+void mapdata_setcurrentplayer(int player);
+int  mapdata_getplayercount(void);
+void mapdata_setplayercount(int count);
+void mapdata_setplayerowner(int playerindex, int owner);
+int  mapdata_getplayerowner(int playerindex);
+int  mapdata_getplayerfromowner(int owner);
+
 struct maptile * mapdata_addtile(int x, int y);
 struct maptile * mapdata_gettile(int x, int y);
 struct maptile * mapdata_getindex(int index);
@@ -90,6 +99,7 @@ void             mapdata_get6suroundingCoordinates(int x, int y,
                                                    int * xs_out, int * ys_out);
 
 
+int  mapdata_endturn(void);
 
 int  mapdata_startturn(int owner);
 

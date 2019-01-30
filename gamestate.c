@@ -55,8 +55,6 @@ static struct animation animation;
 static struct imagedata * imagedata;
 static int hexmouse_x, hexmouse_y;
 
-static struct gamestatesetting settings;
-static int currentowner; // -1 = debug turns
 
 struct grabbed
 {
@@ -156,7 +154,7 @@ static void gamestate_updatehexmouse(void)
 
 }
 
-static void gamestate_randomizemap(void)
+static void gamestate_randomizemap(int numplayers)
 {
    int r;
    int i;
@@ -168,7 +166,7 @@ static void gamestate_randomizemap(void)
    {   
       tile = mapdata_getindex(i);
       r = rand();
-      tile->owner = (r % settings.playercount);
+      tile->owner = (r % numplayers);
    }
 
 }
@@ -179,8 +177,6 @@ void gamestate_init(void)
 
    mapdata_init();
 
-
-   settings.playertypes = NULL;
 
    // initialize outline
    outline.size = OUTLINE_GROWBY;
@@ -194,11 +190,6 @@ void gamestate_init(void)
 
 void gamestate_destroy(void)
 {
-   if(settings.playertypes != NULL)
-   {
-      free(settings.playertypes);
-      settings.playertypes = NULL;
-   }
    free(outline.base);
    outline.base = NULL;
    outline.size = 0;
@@ -242,27 +233,15 @@ static void gamestate_generatemap(void)
       }
    }
 
-   gamestate_randomizemap();
+   gamestate_randomizemap(2);
 
    mapdata_fullclean();
 
    mapdata_setmoneyallcapitals(10);
 }
 
-void gamestate_onenter(struct gamestatesetting * _settings)
+void gamestate_onenter(void)
 {
-   size_t size;
-
-   if(settings.playertypes != NULL)
-   {
-      free(settings.playertypes);
-   }
-   memcpy(&settings, _settings, sizeof(struct gamestatesetting));
-
-   size = sizeof(enum gamestateplayertype) * settings.playercount;
-   settings.playertypes = malloc(size);
-   memcpy(settings.playertypes, _settings->playertypes, size);
-
    gamestate_generatemap();
    gamestate_updatehexmouse();
 
@@ -270,7 +249,8 @@ void gamestate_onenter(struct gamestatesetting * _settings)
    grabbed.toplace = e_ME_none;
    grabbed.src_tile = NULL;
 
-   currentowner = 0; // Set to -1 for debug move
+   mapdata_setcurrentplayer(0); // Set to -1 for debug move
+   
 }
 
 void gamestate_onexit(void)
@@ -356,15 +336,17 @@ static void gamestate_renderui(SDL_Renderer * rend)
    struct mapcapital * cap;
    int money;
    int y;
+   int currentplayer;
    SDL_Rect dr;
 
+   currentplayer = mapdata_getcurrentplayer();
    y = 32;
-   if(currentowner != -1)
+   if(currentplayer != -1)
    {
       SDL_SetTextureColorMod(imagedata->hex, 
-                             teamcolors[currentowner].r,
-                             teamcolors[currentowner].g,
-                             teamcolors[currentowner].b);
+                             teamcolors[currentplayer].r,
+                             teamcolors[currentplayer].g,
+                             teamcolors[currentplayer].b);
       dr.h = dr.w = 32;
       dr.x = 400;
       dr.y = y;
@@ -497,22 +479,29 @@ void gamestate_render(SDL_Renderer * rend)
    struct maptile * tile;
    SDL_Rect sr, dr;
    SDL_Texture * text;
+   int currentplayer;
+   int currentowner;
 
+
+   currentplayer = mapdata_getcurrentplayer();
+   currentowner = mapdata_getplayerowner(currentplayer);
 
    mapcount = mapdata_count();
 
    // Render tiles
    for(i = 0; i < mapcount; i++)
    {
+      int playerindex;
       tile = mapdata_getindex(i);
+      playerindex = mapdata_getplayerfromowner(tile->owner);
 
       dr.w = dr.h = 32;
       gamestate_hexposition(tile->x, tile->y, &dr);
 
       SDL_SetTextureColorMod(imagedata->hex, 
-                             teamcolors[tile->owner].r,
-                             teamcolors[tile->owner].g,
-                             teamcolors[tile->owner].b);
+                             teamcolors[playerindex].r,
+                             teamcolors[playerindex].g,
+                             teamcolors[playerindex].b);
       SDL_RenderCopy(rend, imagedata->hex, NULL, &dr);
    }
 
@@ -552,7 +541,7 @@ void gamestate_render(SDL_Renderer * rend)
          gamestate_hexposition(tile->x, tile->y, &dr);
 
          if(tile->owner == currentowner ||
-            currentowner == -1)
+            currentplayer == -1)
          {
             animate_flag = mapdata_getcanmove(tile);
          }
@@ -667,6 +656,12 @@ static int gamestate_maptilehascaptital(struct maptile * tile)
 static void gamestate_eventleftmouse(int button_state)
 {
    struct maptile * tile;
+   int currentplayer;
+   int currentowner;
+
+   currentplayer = mapdata_getcurrentplayer();
+   currentowner = mapdata_getplayerowner(currentplayer);
+
    if(button_state == SDL_PRESSED)
    {
       tile = mapdata_gettile(hexmouse_x, hexmouse_y);
@@ -674,7 +669,7 @@ static void gamestate_eventleftmouse(int button_state)
       {
          if(tile != NULL && 
             (tile->owner == currentowner ||
-             currentowner == -1) && 
+             currentplayer == -1) && 
             gamestate_maptilehascaptital(tile))
          {
             selcap.isselected = 1;
@@ -685,7 +680,7 @@ static void gamestate_eventleftmouse(int button_state)
                 tile->entity == e_ME_knight ||
                 tile->entity == e_ME_baron) &&
                (tile->owner == currentowner ||
-                currentowner == -1) &&
+                currentplayer == -1) &&
                mapdata_getcanmove(tile) == 1)
             {
                grabbed.src_tile = tile;
@@ -791,45 +786,40 @@ void gamestate_event(SDL_Event * event)
    }
    else if(event->type == SDL_KEYDOWN)
    {
-      int owner;
-      owner = -1;
-      if(event->key.keysym.sym == SDLK_1 && currentowner == -1)
+      int player;
+      player = -1;
+      if(event->key.keysym.sym == SDLK_1)
       {
-         owner = 0;
+         player = 0;
       }
-      else if(event->key.keysym.sym == SDLK_2 && currentowner == -1)
+      else if(event->key.keysym.sym == SDLK_2)
       {
-         owner = 1;
+         player = 1;
       }
-      else if(event->key.keysym.sym == SDLK_3 && currentowner == -1)
+      else if(event->key.keysym.sym == SDLK_3)
       {
-         owner = 2;
+         player = 2;
       }
-      else if(event->key.keysym.sym == SDLK_4 && currentowner == -1)
+      else if(event->key.keysym.sym == SDLK_4)
       {
-         owner = 3;
+         player = 3;
       }
-      else if(event->key.keysym.sym == SDLK_5 && currentowner == -1)
+      else if(event->key.keysym.sym == SDLK_5)
       {
-         owner = 4;
+         player = 4;
       }
-      else if(event->key.keysym.sym == SDLK_SPACE && currentowner != -1)
+      else if(event->key.keysym.sym == SDLK_SPACE)
       {
          // Move forward a turn
-         currentowner ++;
-         if(currentowner >= settings.playercount)
-         {
-            currentowner = 0;
-         }
-         owner = currentowner;
+         mapdata_endturn();
          selcap.isselected = 0;
          gamestate_updateoutline();
       }
      
       
-      if(owner != -1)
+      if(player != -1 && mapdata_getcurrentplayer() == -1)
       {
-         mapdata_startturn(owner);
+         mapdata_startturn(mapdata_getplayerowner(player));
       }
 
    }

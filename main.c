@@ -22,20 +22,10 @@ int main(int args, char * argc[])
    int done;
    int ticks_previous, ticks_diff, ticks_now;
    float seconds;
-   struct gamestatesetting settings;
-   enum gamestateplayertype playertypes[5] = {
-      e_GSPT_human,
-      e_GSPT_ai,
-      e_GSPT_ai,
-      e_GSPT_ai,
-      e_GSPT_ai
-   };
 
    enum state state;
    
 
-   settings.playertypes = playertypes;
-   settings.playercount = 2;
    
    SDL_Init(SDL_INIT_EVERYTHING);   
    window = SDL_CreateWindow("Open Slay", 
@@ -58,7 +48,7 @@ int main(int args, char * argc[])
 
    // loop setup
    state = e_S_game;
-   gamestate_onenter(&settings);
+   gamestate_onenter();
    done = 0;
    while(done == 0)
    {
