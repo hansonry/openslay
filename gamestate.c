@@ -250,6 +250,8 @@ void gamestate_onenter(void)
    grabbed.src_tile = NULL;
 
    mapdata_setcurrentplayer(0); // Set to -1 for debug move
+
+   //mapdata_setmoneyallcapitals(1000);
    
 }
 
@@ -813,6 +815,11 @@ void gamestate_event(SDL_Event * event)
          // Move forward a turn
          mapdata_endturn();
          selcap.isselected = 0;
+         gamestate_updateoutline();
+      }
+      else if(event->key.keysym.sym == SDLK_u)
+      {
+         mapdata_undomove();
          gamestate_updateoutline();
       }
      

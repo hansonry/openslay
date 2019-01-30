@@ -98,6 +98,7 @@ int              mapdata_getcanmove(struct maptile * tile);
 void             mapdata_get6suroundingCoordinates(int x, int y, 
                                                    int * xs_out, int * ys_out);
 
+void mapdata_clearundo(void);
 
 int  mapdata_endturn(void);
 
@@ -106,6 +107,8 @@ int  mapdata_startturn(int owner);
 int  mapdata_moveunit(struct mapcommandresult * result, int owner, 
                       int from_x, int from_y, int to_x, int to_y,
                       enum mapentity entity);
+
+int mapdata_undomove(void);
 
 
 #endif // __MAPDATA_H__

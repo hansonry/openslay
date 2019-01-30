@@ -9,10 +9,32 @@
 #define FLAGS_SEARCHED   0x01
 #define FLAGS_CANMOVE    0x02
 
-
 struct mdplayerdata
 {
    int owner;
+};
+
+struct mdundoevent
+{
+   int moneypayed;
+   int src_x;
+   int src_y;
+   int dest_x;
+   int dest_y;
+   int prevcap_x;
+   int prevcap_y;
+   int dest_owner;
+   enum mapentity src_unit;
+   enum mapentity dest_unit;
+   int caps_count;
+   struct mdundocapital
+   {
+      int destroyed_flag;
+      int money;
+      enum mapentity replacedunit;
+      int x;
+      int y;
+   } caps[6];
 };
 
 
@@ -33,10 +55,16 @@ struct mapdata
    struct mdplayer
    {
       int current;
+      struct mdplayerdata * base;
       size_t count;
       size_t size;
-      struct mdplayerdata * base;
    } players;
+   struct mdundo
+   {
+      struct mdundoevent * base;
+      size_t count;
+      size_t size;
+   } undo;
 };
 
 static struct mapdata data;
@@ -56,6 +84,10 @@ void mapdata_init(void)
    data.players.count = 0;
 
    data.players.current = 0;
+
+   data.undo.size = GROWBY;
+   data.undo.base = malloc(sizeof(struct mdundoevent) * data.undo.size);
+   data.undo.count = 0;
 }
 
 void mapdata_destroy(void)
@@ -74,6 +106,11 @@ void mapdata_destroy(void)
    data.players.base = NULL;
    data.players.size = 0;
    data.players.count = 0;
+
+   free(data.undo.base);
+   data.undo.base = NULL;
+   data.undo.size = 0;
+   data.undo.count = 0;
 }
 
 int mapdata_count(void)
@@ -821,7 +858,8 @@ static void      mapdata_placetree(struct maptile * tile)
 // entities before you run this.
 // After this is run you can place any unit in the taken spot.
 static void      mapdata_taketile(struct maptile * tile, int new_owner, 
-                                  int new_cap_x, int new_cap_y)
+                                  int new_cap_x, int new_cap_y,
+                                  struct mdundoevent * event)
 {
    size_t i, k;
    struct maptile * ltile;
@@ -829,6 +867,12 @@ static void      mapdata_taketile(struct maptile * tile, int new_owner,
    int old_cap_x, old_cap_y;
    int money;
    size_t largest_cap_index;
+
+   
+   // Init Event
+   event->caps_count = 0;
+   event->prevcap_x = tile->cap_x;
+   event->prevcap_y = tile->cap_y;
 
    // 1. Handel the opponent losses
    // 1.a. Check to see if we split the oppent's terratory
@@ -859,6 +903,12 @@ static void      mapdata_taketile(struct maptile * tile, int new_owner,
          if(cap->x == tile->x &&
             cap->y == tile->y)
          {
+            event->caps[event->caps_count].x              = cap->x;
+            event->caps[event->caps_count].y              = cap->y;
+            event->caps[event->caps_count].money          = cap->money;
+            event->caps[event->caps_count].replacedunit   = e_ME_none;
+            event->caps[event->caps_count].destroyed_flag = 1;
+            event->caps_count ++;
             mapdata_removecapital(i);
             break;
          }
@@ -878,6 +928,14 @@ static void      mapdata_taketile(struct maptile * tile, int new_owner,
          if(cap->size < 2)
          {
             mapdata_placetree(ltile);
+
+            event->caps[event->caps_count].x              = cap->x;
+            event->caps[event->caps_count].y              = cap->y;
+            event->caps[event->caps_count].money          = cap->money;
+            event->caps[event->caps_count].replacedunit   = ltile->entity;
+            event->caps[event->caps_count].destroyed_flag = 1;
+            event->caps_count ++;
+
             // Find the captial and remove it
             for(k = 0; k < data.caps.count; k++)
             {
@@ -887,6 +945,7 @@ static void      mapdata_taketile(struct maptile * tile, int new_owner,
                   break;
                }
             }
+            
          }
       }
    }
@@ -912,6 +971,13 @@ static void      mapdata_taketile(struct maptile * tile, int new_owner,
             best = mapdata_findgoodcapitalplace(ltile->x, ltile->y);
             mapdata_shiftcaptial(ltile->x, ltile->y, best->x, best->y);
 
+            event->caps[event->caps_count].x              = best->x;
+            event->caps[event->caps_count].y              = best->y;
+            event->caps[event->caps_count].money          = 0;
+            event->caps[event->caps_count].replacedunit   = best->entity;
+            event->caps[event->caps_count].destroyed_flag = 0;
+            event->caps_count ++;
+
             best->entity = e_ME_capital;
             cap = mapdata_addcapital(NULL);
             cap->x = best->x;
@@ -919,6 +985,7 @@ static void      mapdata_taketile(struct maptile * tile, int new_owner,
             cap->money = 0;
             cap->size = size;
             best->flags &= ~FLAGS_CANMOVE;
+
          }
       }
    }
@@ -977,6 +1044,12 @@ static void      mapdata_taketile(struct maptile * tile, int new_owner,
             // A smaller capital has been picked
             // So we will remove it from the capital list
             //printf("Removeing Cap %d %d at size %d\n", smaller_cap->x, smaller_cap->y, smaller_cap->size);
+            event->caps[event->caps_count].x              = smaller_cap->x;
+            event->caps[event->caps_count].y              = smaller_cap->y;
+            event->caps[event->caps_count].money          = smaller_cap->money;;
+            event->caps[event->caps_count].replacedunit   = e_ME_none;
+            event->caps[event->caps_count].destroyed_flag = 1;
+            event->caps_count ++;
             mapdata_removecapital(smaller_index);
          }
          
@@ -1448,6 +1521,13 @@ int  mapdata_moveunit(struct mapcommandresult * result, int owner,
    struct maptile * src_tile;
    struct maptile * dest_tile;
    struct maptile * cap_tile;
+   struct mdundoevent event;
+
+
+   event.src_x = from_x;
+   event.src_y = from_y;
+   event.dest_x = to_x;
+   event.dest_y = to_y;
 
    if(data.players.current != -1 &&
       data.players.base[data.players.current].owner != owner)
@@ -1489,6 +1569,11 @@ int  mapdata_moveunit(struct mapcommandresult * result, int owner,
 
    if(rvalue == 1)
    {
+
+      event.dest_unit = dest_tile->entity;
+      event.dest_owner = dest_tile->owner;
+      event.src_unit = src_tile->entity;
+   
       // Note: The order of this block of code is very important
       // and strange
 
@@ -1503,6 +1588,7 @@ int  mapdata_moveunit(struct mapcommandresult * result, int owner,
       if(cap != NULL)
       {
          cap->money -= cost;
+         event.moneypayed = cost;
 
          cap_tile = mapdata_gettile(cap->x, cap->y);
 
@@ -1522,13 +1608,20 @@ int  mapdata_moveunit(struct mapcommandresult * result, int owner,
             }
          }
       }
+      else
+      {
+         event.moneypayed = 0;
+      }
 
       // Take the tile if we land in terrory that isn't ours
       if(dest_tile->owner != owner)
       {
+         cap = mapdata_getcapital(dest_tile->x, dest_tile->y);
+
 
          mapdata_taketile(dest_tile, src_tile->owner, 
-                          src_tile->cap_x, src_tile->cap_y);
+                          src_tile->cap_x, src_tile->cap_y, 
+                          &event);
       }
 
       // Finaly set the entity
@@ -1536,11 +1629,28 @@ int  mapdata_moveunit(struct mapcommandresult * result, int owner,
 
 
       mapdata_updateupkeep();
+
+      // Add the event to the undo stack
+
+      if(data.undo.count >= data.undo.size)
+      {
+         data.undo.size = data.undo.count + GROWBY;
+         data.undo.base = realloc(data.undo.base, 
+                                  sizeof(struct mdundoevent) * 
+                                  data.undo.size);
+      }
+      memcpy(&data.undo.base[data.undo.count], &event, 
+             sizeof(struct mdundoevent));
+      data.undo.count ++;
    }
 
    return rvalue;
 }
 
+void mapdata_clearundo(void)
+{
+   data.undo.count = 0;
+}
 
 int  mapdata_endturn(void)
 {
@@ -1553,6 +1663,7 @@ int  mapdata_endturn(void)
       }
 
       mapdata_startturn(data.players.base[data.players.current].owner);
+      mapdata_clearundo();
    }
    return data.players.current;
 }
@@ -1749,6 +1860,181 @@ int mapdata_startturn(int owner)
 
    mapdata_updateupkeep();
    mapdata_updateincome();
+   return 1;
+}
+
+int mapdata_undomove(void)
+{
+   struct mdundoevent * event;
+   struct maptile * src_tile, * dest_tile, * tile;
+   struct mapcapital * cap;
+   int src_cap_x, src_cap_y;
+   size_t i, k;
+
+   int money;
+
+
+   // Grab the lastest event
+   if(data.undo.count == 0)
+   {
+      return 0;
+   }
+
+   data.undo.count --;
+   event = &data.undo.base[data.undo.count];
+
+   // Grab the source and destiation tiles
+   src_tile  = mapdata_gettile(event->src_x,  event->src_y);
+   dest_tile = mapdata_gettile(event->dest_x, event->dest_y);
+
+   if(src_tile == NULL || dest_tile == NULL)
+   {
+      fprintf(stderr, "mapdata_undomove: Null Source or Destination Tile\n");
+   }
+
+   src_cap_x = src_tile->cap_x;
+   src_cap_y = src_tile->cap_y;
+
+   money = 0;
+
+   // Check to see if we captured area
+
+   if(dest_tile->owner != event->dest_owner)
+   {
+      // We did capture area
+
+      // Clear the search flag
+      for(i = 0; i < data.tiles.count; i++)
+      {
+         tile = &data.tiles.base[i];
+         tile->flags &= ~FLAGS_SEARCHED;
+      }
+
+      // Give it back it's tile
+      dest_tile->owner = event->dest_owner;
+      dest_tile->cap_x = event->prevcap_x;
+      dest_tile->cap_y = event->prevcap_y;
+
+
+      // Destroy all built captials
+      for(i = 0; i < event->caps_count; i++)
+      {
+         struct mdundocapital * ucap;
+         ucap = &event->caps[i];
+         if(ucap->destroyed_flag == 0)
+         {
+            // Remove the capital from capitals
+            for(k = 0; k < data.caps.count; k++)
+            {
+               cap = &data.caps.base[k];
+               if(cap->x == ucap->x &&
+                  cap->y == ucap->y)
+               {
+                  mapdata_removecapital(k);
+                  break;
+               }
+            }
+
+            // Find the tile and return it
+            tile = mapdata_gettile(ucap->x, ucap->y);
+            if(tile != NULL)
+            {
+               tile->entity = ucap->replacedunit;
+            }
+
+         }
+      }
+
+      // Paint the old capital that we took
+      cap = mapdata_getcapital(event->prevcap_x, event->prevcap_y);
+      if(cap != NULL) // May be null if we took a tile without a capital
+      {
+         tile = mapdata_gettile(cap->x, cap->y);
+         cap->size = mapdata_paintcapital(tile);
+      }
+
+      // Rebuild all destroyed capitals 
+      for(i = 0; i < event->caps_count; i++)
+      {
+         struct mdundocapital * ucap;
+         ucap = &event->caps[i];
+         if(ucap->destroyed_flag == 1)
+         {
+            cap = mapdata_addcapital(NULL);
+            cap->x = ucap->x;
+            cap->y = ucap->y;
+            cap->money = ucap->money;
+
+            if(ucap->money > 0)
+            {
+               // To get here this captial needed to be combined with the
+               // attacking captial. So add this to the money pile
+               money += ucap->money;
+            }
+
+            tile = mapdata_gettile(cap->x, cap->y);
+
+            tile->cap_x = cap->x;
+            tile->cap_y = cap->y;
+            cap->size = mapdata_paintcapital(tile);
+            tile->entity = e_ME_capital;
+            //printf("Restored %d %d\n", cap->x, cap->y);
+
+         }
+      }
+      mapdata_updateincome();
+   }
+
+
+   // Restor the tiles
+   dest_tile->entity = event->dest_unit;
+   src_tile->entity = event->src_unit;
+
+   // Refund the attacking cappital if nessary
+   cap = mapdata_getcapital(src_tile->cap_x, src_tile->cap_y);
+   if(cap == NULL)
+   {
+      fprintf(stderr, "mapdata_undomove: Null capital\n");
+   }
+
+   // Handle Money of the attacing capital
+   cap->money += event->moneypayed;
+   tile = mapdata_gettile(cap->x, cap->y);
+   if(tile == NULL)
+   {
+      fprintf(stderr, "mapdata_undomove: Null capital tile\n");
+   }
+
+   if(cap->money >= 10)
+   {
+      tile->flags |= FLAGS_CANMOVE;
+   }
+   else
+   {
+      tile->flags &= ~FLAGS_CANMOVE;
+   }
+
+   // Handle money for the captial that was merged, but now is split
+   if(money > 0)
+   {
+      cap = mapdata_getcapital(src_cap_x, src_cap_y);
+      tile = mapdata_gettile(src_cap_x, src_cap_y);
+      if(tile == NULL || cap == NULL)
+      {
+         fprintf(stderr, "mapdata_undomove: Null capital and capital tile\n");
+      }
+      cap->money -= money;
+      if(cap->money >= 10)
+      {
+         tile->flags |= FLAGS_CANMOVE;
+      }
+      else
+      {
+         tile->flags &= ~FLAGS_CANMOVE;
+      }
+   }
+   
+   mapdata_updateupkeep();
    return 1;
 }
 
