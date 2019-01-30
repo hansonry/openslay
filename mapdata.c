@@ -1982,6 +1982,16 @@ int mapdata_undomove(void)
 
          }
       }
+
+      // Resize owner of original lands so that is is accurate
+      cap = mapdata_getcapital(src_cap_x, src_cap_y);
+      tile = mapdata_gettile(src_cap_x, src_cap_y);
+      if(tile == NULL || cap == NULL)
+      {
+         fprintf(stderr, "mapdata_undomove: Null capital and capital tile\n");
+      }
+      cap->size = mapdata_paintcapital(tile);
+
       mapdata_updateincome();
    }
 
@@ -2014,7 +2024,9 @@ int mapdata_undomove(void)
       tile->flags &= ~FLAGS_CANMOVE;
    }
 
+
    // Handle money for the captial that was merged, but now is split
+  
    if(money > 0)
    {
       cap = mapdata_getcapital(src_cap_x, src_cap_y);
