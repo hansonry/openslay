@@ -2051,3 +2051,28 @@ int mapdata_undomove(void)
 }
 
 
+int mapdata_cancurrentplayermove(void)
+{
+   int owner;
+   size_t i;
+   struct maptile * tile;
+   owner = mapdata_getplayerowner(data.players.current);
+
+   for(i = 0; i < data.tiles.count; i++)
+   {
+      tile = &data.tiles.base[i];
+      if((tile->owner == owner || 
+          data.players.current == -1) &&
+         (tile->flags | FLAGS_CANMOVE) == FLAGS_CANMOVE &&
+         (tile->entity == e_ME_capital ||
+          tile->entity == e_ME_peasant ||
+          tile->entity == e_ME_spearman ||
+          tile->entity == e_ME_knight ||
+          tile->entity == e_ME_baron))
+      {
+         return 1;      
+      }
+   }
+   return 0;
+}
+

@@ -111,5 +111,7 @@ int  mapdata_moveunit(struct mapcommandresult * result, int owner,
 int mapdata_undomove(void);
 
 
+int mapdata_cancurrentplayermove(void);
+
 #endif // __MAPDATA_H__
 
