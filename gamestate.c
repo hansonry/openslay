@@ -1,6 +1,7 @@
 #include "gamestate.h"
 #include "imagedata.h"
 #include "mapdata.h"
+#include "ryangui.h"
 #include <stdlib.h>
 #include <time.h>
 
@@ -66,6 +67,8 @@ struct grabbed
 };
 
 static struct grabbed grabbed;
+
+struct ryangui * gui;
 
 static void gamestate_hexposition(int x, int y, SDL_Rect * dest)
 {
@@ -186,6 +189,14 @@ void gamestate_init(void)
    // intialize Animation
    animation.timer = 0;
    animation.state = 0;
+
+   // Init the GUI
+   {
+      struct ryangui_component * comp;
+      gui = ryangui_new("rootbox", ryangui_component_box_init);
+      comp = ryangui_getrootcomponent(gui);
+      ryangui_component_set_possize(comp, 10, 10, 100, 100);
+   }
 }
 
 void gamestate_destroy(void)
@@ -195,6 +206,9 @@ void gamestate_destroy(void)
    outline.size = 0;
    outline.count = 0;
    mapdata_destroy();
+
+   // Free the GUI
+   ryangui_destroy(gui);
 
 }
 
@@ -274,6 +288,8 @@ void gamestate_update(float dt)
          animation.state = 0;
       }
    }
+
+   ryangui_layout(gui);
 }
 
 #define BMFONT_WIDTH      10
@@ -389,6 +405,8 @@ static void gamestate_renderui(SDL_Renderer * rend)
          drawtext(rend, 400, y, text);
       }
    }
+
+   ryangui_render(gui, rend);
 }
 
 static SDL_Texture * gamestate_getUnitTexture(enum mapentity entity, 
@@ -768,6 +786,7 @@ static void gamestate_eventrightmouse(int button_state)
 
 void gamestate_event(SDL_Event * event)
 {
+   ryangui_event(gui, event);
    if(event->type == SDL_MOUSEMOTION)
    {
       gamestate_updatehexmouse();

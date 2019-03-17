@@ -93,7 +93,7 @@ void ryangui_component_get_possize(struct ryangui_component * comp,
                                    int * width, int * height);
 
 
-// Rendering Boxes
+// Components
 
 void ryangui_component_box_init(struct ryangui_componentdefinition * definition);
 
