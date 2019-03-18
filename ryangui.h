@@ -2,6 +2,9 @@
 #define __RYANGUI_H__
 #include "SDL2/SDL.h"
 
+#define RYANGUI_FLAGS_DRAWBACKGROUND 0x01
+#define RYANGUI_FLAGS_DRAWBORDER     0x02
+
 struct ryangui_layoutbounds
 {
    int width_min;
@@ -43,7 +46,8 @@ typedef void (*ryangui_compfuncinit)(struct ryangui_componentdefinition * defini
 
 struct ryangui;
 
-struct ryangui * ryangui_new(const char * rootcompname, 
+struct ryangui * ryangui_new(SDL_Renderer * rend,
+                             const char * rootcompname, 
                              ryangui_compfuncinit rootcompinit);
 void ryangui_destroy(struct ryangui * gui);
 
@@ -92,10 +96,31 @@ void ryangui_component_get_possize(struct ryangui_component * comp,
                                    int * x, int * y, 
                                    int * width, int * height);
 
+void * ryangui_component_get_data(struct ryangui_component * comp);
+
+void ryangui_component_set_flags(struct ryangui_component * comp, int flags);
+
+
+// Custom Component Helpers
+void ryangui_component_notify_layout(struct ryangui_component * comp);
+void ryangui_component_draw_background(struct ryangui_component * comp,
+                                       SDL_Renderer * rend,
+                                       int x, int y,
+                                       int width, int height);
+void ryangui_component_draw_border(struct ryangui_component * comp,
+                                   SDL_Renderer * rend,
+                                   int x, int y,
+                                   int width, int height);
+
+
 
 // Components
 
 void ryangui_component_box_init(struct ryangui_componentdefinition * definition);
+
+void ryangui_component_label_init(struct ryangui_componentdefinition * definition);
+
+void ryangui_component_label_set_text(struct ryangui_component * label, const char * text);
 
 #endif // __RYANGUI_H__
 

@@ -43,7 +43,7 @@ int main(int args, char * argc[])
    ticks_previous = SDL_GetTicks();
 
    // state init
-   gamestate_init();
+   gamestate_init(rend);
    
 
    // loop setup

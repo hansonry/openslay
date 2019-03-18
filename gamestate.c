@@ -174,7 +174,7 @@ static void gamestate_randomizemap(int numplayers)
 
 }
 
-void gamestate_init(void)
+void gamestate_init(SDL_Renderer * rend)
 {
    imagedata = imagedata_get();
 
@@ -193,9 +193,10 @@ void gamestate_init(void)
    // Init the GUI
    {
       struct ryangui_component * comp;
-      gui = ryangui_new("rootbox", ryangui_component_box_init);
+      gui = ryangui_new(rend, "rootbox", ryangui_component_label_init);
       comp = ryangui_getrootcomponent(gui);
       ryangui_component_set_possize(comp, 10, 10, 100, 100);
+      ryangui_component_label_set_text(comp, "This is a really long test\nWith a newline :)");
    }
 }
 

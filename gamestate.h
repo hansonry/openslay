@@ -2,7 +2,7 @@
 #define __GAMESTATE_H__
 #include "SDL2/SDL.h"
 
-void gamestate_init(void);
+void gamestate_init(SDL_Renderer * rend);
 void gamestate_destroy(void);
 
 void gamestate_onenter(void);
