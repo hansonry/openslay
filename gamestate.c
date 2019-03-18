@@ -192,11 +192,13 @@ void gamestate_init(SDL_Renderer * rend)
 
    // Init the GUI
    {
-      struct ryangui_component * comp;
-      gui = ryangui_new(rend, "rootbox", ryangui_component_label_init);
-      comp = ryangui_getrootcomponent(gui);
-      ryangui_component_set_possize(comp, 10, 10, 100, 100);
-      ryangui_component_label_set_text(comp, "This is a really long test\nWith a newline :)");
+      struct ryangui_component * root, * label;
+      gui = ryangui_new(rend, "rootbox", ryangui_component_box_init);
+      root = ryangui_getrootcomponent(gui);
+      label = ryangui_component_createchild(root, "label", ryangui_component_label_init);
+      ryangui_component_set_possize(root, 10, 10, 100, 100);
+      ryangui_component_set_flags(root, RYANGUI_FLAGS_DRAWBORDER | RYANGUI_FLAGS_DRAWBACKGROUND);
+      ryangui_component_label_set_text(label, "There are more moves you could make.\nAre you sure you want to end your turn?");
    }
 }
 

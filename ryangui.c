@@ -95,7 +95,8 @@ ryangui_component_new(const char * name,
    comp->definition.data = NULL;
 
    // Flags
-   comp->flags = RYANGUI_FLAGS_DRAWBORDER | RYANGUI_FLAGS_DRAWBACKGROUND;
+   //comp->flags = RYANGUI_FLAGS_DRAWBORDER | RYANGUI_FLAGS_DRAWBACKGROUND;
+   comp->flags = 0;
 
    init(&comp->definition);
 
@@ -419,6 +420,7 @@ void ryangui_component_set_possize(struct ryangui_component * comp,
 
    if(width > 0) comp->width = width;
    if(height > 0) comp->height = height;
+   comp->needs_layout = 1;
 }
 
 void ryangui_component_set_position(struct ryangui_component * comp,
@@ -432,6 +434,7 @@ void ryangui_component_set_size(struct ryangui_component * comp,
 {
    if(width > 0) comp->width = width;
    if(height > 0) comp->height = height;
+   comp->needs_layout = 1;
 }
 
 void ryangui_component_set_x(struct ryangui_component * comp, int x)
@@ -447,11 +450,13 @@ void ryangui_component_set_y(struct ryangui_component * comp, int y)
 void ryangui_component_set_width(struct ryangui_component * comp, int width)
 {
    if(width > 0) comp->width = width;
+   comp->needs_layout = 1;
 }
 
 void ryangui_component_set_height(struct ryangui_component * comp, int height)
 {
    if(height > 0) comp->height = height;
+   comp->needs_layout = 1;
 }
 
 void ryangui_component_get_possize(struct ryangui_component * comp, 
@@ -526,6 +531,24 @@ static void ryangui_component_box_layout(struct ryangui_component * comp,
                                          struct ryangui_layoutbounds * bounds,
                                          void * data)
 {
+   int i, size;
+   int mw, mh;
+   struct ryangui_component * child;
+   mw = 0;
+   mh = 0;
+   size = ryangui_component_childcount(comp);
+   for(i = 0; i < size; i++)
+   {
+      int w, h, x, y;
+      child = ryangui_component_getchildbyindex(comp, i);
+      ryangui_component_layout(child, 0);
+      ryangui_component_get_possize(child, &x, &y, &w, &h);
+      if(mw < x + w) mw = x + w;
+      if(mh < y + h) mh = y + h;
+
+   }
+
+   ryangui_component_set_size(comp, mw, mh);
 }
 
 
@@ -609,6 +632,10 @@ static void ryangui_text_get_size(struct ryangui_lookfeel * lookfeel,
          linewidth += lookfeel->bmpfont_char_width;
       }
       text ++;
+   }
+   if(linewidth > lwidth)
+   {
+      lwidth = linewidth;
    }
    
 
@@ -737,6 +764,8 @@ void ryangui_component_label_init(struct ryangui_componentdefinition * definitio
    definition->event   = ryangui_component_label_event;
 
    data->text = strdup("");
+
+
 }
 
 void ryangui_component_label_set_text(struct ryangui_component * label, const char * text)
